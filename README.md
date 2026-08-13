@@ -21,7 +21,7 @@ brew install yt-dlp ffmpeg whisper-cpp
 
 ## Instalação
 
-Clone este repositório privado e copie a pasta da skill para o diretório de skills do Codex:
+Clone este repositório e copie a pasta da skill para o diretório de skills do Codex:
 
 ```bash
 git clone https://github.com/rwerneckfilho/youtube-transcriber-skill.git
