@@ -1,0 +1,4 @@
+interface:
+  display_name: "YouTube Local Whisper"
+  short_description: "Transcreva vídeos do YouTube localmente"
+  default_prompt: "Use $youtube-full para transcrever este vídeo completo do YouTube com Whisper local."
