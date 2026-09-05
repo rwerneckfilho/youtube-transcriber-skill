@@ -1,6 +1,6 @@
 ---
 name: youtube-full
-description: "Handle YouTube videos, links, IDs, channels, and playlists. Use for downloading permitted media, extracting complete transcripts, captions, timestamps, summaries, translations, quotes, or research from YouTube. For transcription, use the bundled local-first yt-dlp + Whisper workflow; do not require TranscriptAPI or another paid transcript service."
+description: "Handle YouTube videos, links, IDs, channels, and playlists. Use for downloading permitted media, extracting complete transcripts, captions, speaker-separated transcripts, timestamps, summaries, translations, quotes, or research from YouTube. For transcription, use the bundled local-first yt-dlp + Whisper workflow; do not require TranscriptAPI or another paid transcript service."
 ---
 
 # YouTube Full
@@ -29,9 +29,25 @@ The first run downloads the multilingual `large-v3-turbo-q5_0` model to the loca
 
 Use `--language pt`, `--language en`, or another ISO language code when known. Keep `auto` when uncertain. Use `--model PATH` to select another whisper.cpp GGML model.
 
+## Local speaker diarization
+
+When the user asks to identify or separate speakers, add `--diarize`:
+
+```bash
+scripts/transcribe-youtube.sh --diarize "YOUTUBE_URL"
+```
+
+The optional diarization stage runs locally with `pyannote.audio` and the open-source `pyannote/speaker-diarization-community-1` model. It never sends audio to a transcription or diarization API, and disables pyannote and Hugging Face telemetry by default. The first use needs internet access only to download model files.
+
+Before the first diarized transcription, run `scripts/setup-diarization.sh`. Then accept the Community-1 model terms on Hugging Face and provide a read token with `HF_TOKEN`, or authenticate with the Hugging Face CLI. This token authorizes the model download; it is not a paid inference API key. Once cached, inference is local. A fully downloaded local model directory can be selected with `--diarization-model PATH`.
+
+Use `--num-speakers N` when the exact number is known. Otherwise, optional `--min-speakers N` and `--max-speakers N` bounds can improve detection. CPU is the safe default; `--diarization-device cuda` and `--diarization-device mps` are available when supported.
+
+Diarization produces `transcript-speakers.txt`, `transcript-speakers.srt`, `transcript-speakers.json`, and `diarization.json`. Speaker labels such as `SPEAKER_00` distinguish voices but do not infer people's real names.
+
 ## Dependencies
 
-Check for `yt-dlp`, `ffmpeg`, `whisper-cli`, and `curl`. On macOS, `curl` is built in; install the other missing tools with Homebrew:
+Check for `yt-dlp`, `ffmpeg`, `whisper-cli`, and `curl`. Speaker diarization additionally needs Python 3.10+ and the environment created by `scripts/setup-diarization.sh`. On macOS, `curl` is built in; install the other missing base tools with Homebrew:
 
 ```bash
 brew install yt-dlp ffmpeg whisper-cpp
@@ -44,5 +60,6 @@ Do not install packages unless the user requested transcription or setup. Explai
 - Preserve the complete transcript artifact; do not truncate it in chat.
 - Run `scripts/rebuild-index.py PATH_TO_YT_TRANSCRIPTS` after adding, moving, or removing a transcript folder manually.
 - Give the user clickable links to the TXT and SRT files.
+- For diarized runs, also give clickable links to `transcript-speakers.txt` and `transcript-speakers.srt`.
 - Summarize only when requested or when a short orientation is clearly useful.
 - Respect copyright and platform terms. Transcribe content the user supplied for personal analysis; do not redistribute the source video.
