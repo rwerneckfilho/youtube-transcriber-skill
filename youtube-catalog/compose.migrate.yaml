@@ -1,0 +1,21 @@
+# Use only for an explicit migration, with the application stopped.
+services:
+  catalog:
+    # The one-off migration reads legacy files with their original owner and
+    # assigns the verified copies to the runtime user. Runtime keeps no caps.
+    cap_add:
+      - DAC_OVERRIDE
+      - CHOWN
+    volumes:
+      - type: bind
+        source: ${LEGACY_TRANSCRIPTS_DIR:-../yt-transcripts}
+        target: /legacy/transcripts
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LEGACY_DATA_DIR:-./data}
+        target: /legacy/data
+        read_only: true
+        bind:
+          create_host_path: false

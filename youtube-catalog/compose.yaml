@@ -5,25 +5,20 @@ services:
     image: youtube-catalog:local
     init: true
     restart: "no"
-    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    user: "1000:1000"
     ports:
       - "127.0.0.1:${CATALOG_PORT:-8765}:8765"
     environment:
-      TRANSCRIPTS_DIR: /transcripts
-      DATA_DIR: /data
+      TRANSCRIPTS_DIR: /storage/transcripts
+      DATA_DIR: /storage/catalog
+      MODEL_DIR: /storage/models
+      WORK_DIR: /storage/work
       STATIC_DIR: /app/static
       SCAN_INTERVAL_SECONDS: "60"
       DOWNLOAD_THUMBNAILS: "${DOWNLOAD_THUMBNAILS:-true}"
+      WHISPER_THREADS: "${WHISPER_THREADS:-4}"
     volumes:
-      - type: bind
-        source: ${YOUTUBE_TRANSCRIPTS_DIR:-../yt-transcripts}
-        target: /transcripts
-        read_only: false
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./data
-        target: /data
+      - storage:/storage
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -31,9 +26,12 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    stop_grace_period: 20s
+    stop_grace_period: 40s
     logging:
       driver: json-file
       options:
         max-size: "5m"
         max-file: "2"
+volumes:
+  storage:
+    name: "${CATALOG_VOLUME:-youtube-catalog-storage}"

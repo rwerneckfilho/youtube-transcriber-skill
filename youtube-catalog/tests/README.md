@@ -19,7 +19,7 @@ O aceite verifica:
 - Erros JSON para rotas inexistentes, bloqueio de caminhos fora dos downloads, capas locais e carregamento da interface por endereço direto.
 - SHA-256 dos metadados, métodos e transcrições antes e depois dos testes. Mídia de áudio/vídeo não é lida nem alterada.
 
-Uma falha é apresentada com o nome do cenário. O processo encerra com código 1 quando algum cenário falha e 0 quando todos passam. O teste de busca com acentos, o cenário de falantes e os filtros de categoria requerem exemplos presentes na coleção atual.
+Uma falha é apresentada com o nome do cenário. O processo encerra com código 1 quando algum cenário falha e 0 quando todos passam. Cenários que dependem de exemplos específicos, como títulos acentuados, falantes e classificações, informam quando não encontram uma amostra ativa. Os downloads são conferidos mesmo quando todos os vídeos com falantes estiverem na lixeira.
 
 ## Verificação no navegador
 
@@ -33,7 +33,7 @@ O endereço padrão é `http://127.0.0.1:8765`; `CATALOG_URL` aceita outro ender
 
 O roteiro verifica início, filtros, paginação, busca, acesso ao trecho encontrado, método, falantes, carregamento progressivo, diretório de canais, teclado e telas de 375 px. Abre e fecha o diálogo de categorias sem salvar. Bloqueia requisições de escrita à API e todo acesso HTTP externo durante a execução; recarrega a interface e repete a leitura nessas condições. Registra erros JavaScript e qualquer tentativa de acesso externo.
 
-As capturas de tela ficam em `/tmp/youtube-catalog-home.png`, `/tmp/youtube-catalog-reader.png` e `/tmp/youtube-catalog-mobile.png`. O teste depende de vídeos classificados, com método, sem método, com falantes e com título acentuado, presentes na coleção inicial.
+As capturas de tela ficam em `/tmp/youtube-catalog-home.png`, `/tmp/youtube-catalog-reader.png` e `/tmp/youtube-catalog-mobile.png`. O teste usa vídeos classificados, com método e com título acentuado da coleção inicial. As verificações de falantes e método ausente informam quando não há amostras ativas.
 
 ## Exclusão definitiva: somente dados descartáveis
 
@@ -52,6 +52,32 @@ TEST_SOURCE_DIR="<source informado pelo preparador>" node tests/browser-permanen
 O roteiro verifica os avisos, o nome do vídeo, foco em Cancelar, Escape, confirmação exata `EXCLUIR`, modal mobile e exclusão da pasta completa. Compara hashes do outro vídeo, verifica sua leitura e seus downloads e atualiza o catálogo para provar que o vídeo removido não reaparece. As ações de mover para a lixeira e restaurar continuam cobertas separadamente por `browser-update.cjs` e devem preservar todos os originais.
 
 Cada execução bem-sucedida requer uma fixture nova, pois a anterior foi parcialmente apagada. As capturas ficam em `/tmp/youtube-catalog-permanent-dialog.png` e `/tmp/youtube-catalog-permanent-mobile.png`; o relatório fica em `/tmp/youtube-catalog-permanent-report.json`.
+
+## Fila e idiomas da interface com API simulada
+
+`browser-jobs.cjs` testa somente a interface compilada de um servidor isolado em `127.0.0.1:8766`. Todas as rotas `/api/*` são interceptadas pelo Playwright e respondidas por fixtures em memória dentro do próprio teste. Nenhum trabalho real é enfileirado e nenhum vídeo é baixado ou transcrito.
+
+```sh
+node tests/browser-jobs.cjs
+```
+
+O roteiro cobre envio de vídeo e playlist, seleção do idioma da transcrição, estados da fila, logs, cancelamento e nova tentativa. Também verifica PT/EN/ES nas rotas e diálogos, persistência da preferência da interface após recarregar e layout móvel. As fixtures usam conteúdo neutro para detectar texto da interface que continue em português nas traduções. O relatório declara explicitamente essa cobertura simulada; testes de processamento real, migração e persistência do volume precisam ser executados separadamente.
+
+O relatório fica em `/tmp/youtube-catalog-jobs-report.json`, com capturas por idioma. Os roteiros anteriores iniciam seus contextos isolados explicitamente em português, sem modificar a preferência do navegador pessoal do usuário.
+
+## Volume nomeado: integração totalmente sintética
+
+Com a imagem já construída e a porta `8767` livre, execute:
+
+```sh
+python3 tests/docker-volume.py
+```
+
+O roteiro fixa o ID da imagem local `youtube-catalog:local` (`--image` permite outra imagem já existente), sem baixar imagens. Cria um volume nomeado e uma rede interna exclusivos, gera dois vídeos artificiais dentro do volume e reserva somente `127.0.0.1:8767` no host. Consulta a API HTTP pelo loopback do container, pois algumas versões do Docker Desktop bloqueiam portas publicadas em redes internas. Não monta nem consulta a coleção original e não usa os servidores das portas `8765` e `8766`. Ao terminar, remove somente os recursos que criou.
+
+Verifica categorias editadas, lixeira, fontes, capa armazenada, área de modelos e arquivos de trabalho após reimportar, desligar, ligar e recriar o container. A restauração deve recuperar a data original, a transcrição, o método e as categorias escolhidas. Também cria uma tarefa pendente e cancela outra para conferir sua persistência. O worker fica desabilitado: isso não testa processamento, downloads ou transcrição real.
+
+A última etapa usa `--network none` e o cliente de testes do FastAPI dentro do container para conferir interface, fontes locais, busca com acentos, segmentos, downloads, capa, lixeira e fila. A rede interna impede acesso externo nas demais etapas. Dez arquivos sintéticos são comparados por SHA-256; o teste também confirma que nenhum modelo foi baixado nem começou um trabalho de transcrição. O relatório fica em `/tmp/youtube-catalog-volume-report.json`.
 
 ## Exercícios de resiliência
 

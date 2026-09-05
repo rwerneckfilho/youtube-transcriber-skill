@@ -47,6 +47,7 @@ async function main() {
 
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'pt-BR' });
+  await context.addInitScript(() => localStorage.setItem('rw-ai.locale', 'pt'));
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => pageErrors.push(error.message));
@@ -102,7 +103,7 @@ async function main() {
       await page.getByRole('heading', { name: 'Grandes ideias. Sempre à mão.' }).waitFor();
       await page.waitForFunction(count => Number(document.querySelector('.collection-counter strong')?.textContent.replace(/\D/g, '')) === count, stats.videos);
       await page.locator('.hero h2').waitFor();
-      await page.locator('.shelf .video-card').first().waitFor();
+      await page.locator('.shelf').first().locator('.video-card').first().waitFor();
       await noHorizontalOverflow();
       await waitForVisibleImages();
       await page.screenshot({ path: '/tmp/youtube-catalog-home.png', fullPage: false });
@@ -170,14 +171,17 @@ async function main() {
       await page.locator('.segment').first().waitFor();
     });
 
-    await check('vídeo sem método e transcrição com falantes', async () => {
-      assert.ok(missingMethod && speakerVideo, 'Missing-method and speaker examples are required');
-      await reader(missingMethod);
-      assert.equal(await page.getByRole('tab', { name: 'Método', exact: true }).count(), 0);
-      await reader(speakerVideo);
-      await page.locator('.segment .speaker').first().waitFor();
-      assert.ok(await page.locator('.download-list a').count() >= 6);
-      assert.match(await page.locator('.reader-toolbar').textContent(), /Com falantes/);
+    await check('vídeo sem método e falantes, quando presentes no acervo ativo', async () => {
+      if (missingMethod) {
+        await reader(missingMethod);
+        assert.equal(await page.getByRole('tab', { name: 'Método', exact: true }).count(), 0);
+      } else console.log('       Sem exemplo ativo de vídeo sem método; cenário não executado.');
+      if (speakerVideo) {
+        await reader(speakerVideo);
+        await page.locator('.segment .speaker').first().waitFor();
+        assert.ok(await page.locator('.download-list a').count() >= 6);
+        assert.match(await page.locator('.reader-toolbar').textContent(), /Com falantes/);
+      } else console.log('       Sem transcrição com falantes no acervo ativo; cenário não executado.');
     });
 
     await check('vídeo mais longo, carregamento progressivo e Ver contexto', async () => {

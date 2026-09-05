@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""Prove named-volume persistence using synthetic data and a local Docker image.
+
+Only port 8767 is used. No source folder is mounted, no image is pulled, and the
+containers have either an internal Docker network or no network. The job worker
+is disabled: queued/cancelled persistence is covered, actual processing is not.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import socket
+import subprocess
+import sys
+import time
+import uuid
+
+REPORT = Path("/tmp/youtube-catalog-volume-report.json")
+KEEP, TRASH = "volume_keep", "volume_trash"
+CONTAINER = None
+
+API_REQUEST = r'''
+import json, sys
+from urllib.request import Request, urlopen
+body = json.loads(sys.argv[3])
+request = Request('http://127.0.0.1:8765/api' + sys.argv[1], method=sys.argv[2],
+                  data=json.dumps(body).encode() if body is not None else None,
+                  headers={'Content-Type': 'application/json'})
+with urlopen(request, timeout=8) as response:
+    print(response.read().decode())
+'''
+
+SEED = r'''
+import base64, hashlib, json
+from pathlib import Path
+root = Path('/storage')
+source = root / 'transcripts'
+assert not list(source.iterdir()), 'A fixture exige um volume novo e vazio'
+for video_id in ('volume_keep', 'volume_trash'):
+    folder = source / video_id
+    folder.mkdir()
+    meta = {'id': video_id, 'title': 'Automação sintética ' + video_id,
+            'channel': 'Canal sintético', 'channel_id': 'volume-channel',
+            'duration': 20, 'language': 'pt', 'upload_date': '20200101',
+            'description': 'Material artificial exclusivo do teste de volume.',
+            'tags': ['automação', 'sintético']}
+    texts = ['Persistência de automação no volume local.', 'Leitura sintética sem internet.']
+    transcript = {'result': {'language': 'pt'}, 'transcription': [
+        {'offsets': {'from': i * 10000, 'to': i * 10000 + 5000}, 'text': text}
+        for i, text in enumerate(texts)]}
+    (folder / 'video.json').write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
+    (folder / 'transcript.json').write_text(json.dumps(transcript, ensure_ascii=False), encoding='utf-8')
+    (folder / 'transcript.txt').write_text('\n'.join(texts), encoding='utf-8')
+    (folder / 'transcript.srt').write_text('1\n00:00:00,000 --> 00:00:05,000\n' + texts[0], encoding='utf-8')
+    (folder / 'METODO.md').write_text('---\ncluster_id: C1\ncluster: Categoria sintética\n---\n# Método\n\nUm método artificial.', encoding='utf-8')
+thumbnails = root / 'catalog' / 'thumbnails'
+thumbnails.mkdir(exist_ok=True)
+image = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=')
+(thumbnails / 'volume_keep.png').write_bytes(image)
+(root / 'models' / 'fixture-only.bin').write_bytes(b'Synthetic model persistence marker; not a Whisper model.\n')
+(root / 'work' / 'fixture-only.txt').write_text('Synthetic work persistence marker.\n')
+manifest = {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(source.rglob('*')) if p.is_file()}
+(root / 'volume-test-fixture.json').write_text(json.dumps({'purpose': 'synthetic-volume-test', 'manifest': manifest}))
+print(json.dumps({'files': len(manifest), 'thumbnail_sha256': hashlib.sha256(image).hexdigest()}))
+'''
+
+VERIFY_FILES = r'''
+import hashlib, json
+from pathlib import Path
+root = Path('/storage')
+fixture = json.loads((root / 'volume-test-fixture.json').read_text())
+assert fixture['purpose'] == 'synthetic-volume-test'
+source = root / 'transcripts'
+actual = {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest()
+          for p in sorted(source.rglob('*')) if p.is_file()}
+assert actual == fixture['manifest'], 'Fontes sintéticas foram alteradas'
+assert (root / 'models' / 'fixture-only.bin').read_bytes() == b'Synthetic model persistence marker; not a Whisper model.\n'
+assert (root / 'work' / 'fixture-only.txt').read_text() == 'Synthetic work persistence marker.\n'
+assert len(list((root / 'models').iterdir())) == 1, 'Um modelo foi baixado durante o teste'
+assert len(list((root / 'work').iterdir())) == 1, 'O processamento de vídeo foi iniciado'
+print(json.dumps({'files': len(actual), 'models_downloaded': 0, 'processing_started': False}))
+'''
+
+OFFLINE = VERIFY_FILES + r'''
+import re, sys
+from fastapi.testclient import TestClient
+from backend.app import create_app
+expected = json.loads(sys.argv[1])
+with TestClient(create_app(initial_scan=False, start_jobs=False, download_thumbnails=False)) as client:
+    stats = client.get('/api/stats').json()
+    assert (stats['videos'], stats['deleted_videos']) == (1, 1)
+    active = client.get('/api/videos?q=automacao').json()
+    assert active['total'] == 1 and active['items'][0]['id'] == 'volume_keep'
+    trash = client.get('/api/videos?deleted=true').json()
+    assert trash['total'] == 1 and trash['items'][0]['id'] == 'volume_trash'
+    assert trash['items'][0]['categories'] == expected['categories']
+    assert trash['items'][0]['deleted_at'] == expected['deleted_at']
+    assert client.get('/api/videos/volume_trash').status_code == 404
+    detail = client.get('/api/videos/volume_keep').json()
+    segments = client.get('/api/videos/volume_keep/segments').json()
+    assert segments['total'] == 2 and 'Persistência' in segments['items'][0]['text']
+    assert detail['has_method'] and 'Um método artificial.' in detail['method']
+    assert {f['filename'] for f in detail['downloads']} >= {'transcript.txt', 'transcript.srt', 'transcript.json'}
+    for download in detail['downloads']:
+        response = client.get(download['url'])
+        assert response.status_code == 200
+        original = source / 'volume_keep' / download['filename']
+        assert response.content == original.read_bytes()
+    cover = client.get(detail['thumbnail_url'])
+    assert cover.status_code == 200
+    assert hashlib.sha256(cover.content).hexdigest() == expected['thumbnail_sha256']
+    assert client.get('/api/videos/volume_trash/thumbnail').status_code == 200
+    tasks = client.get('/api/jobs').json()
+    assert tasks['total'] == 2
+    assert {j['id']: j['status'] for j in tasks['items']} == expected['jobs']
+    index = client.get('/')
+    assert index.status_code == 200 and '<div id="root">' in index.text
+    assets = re.findall(r'(?:src|href)="(/assets/[^"?#]+)', index.text)
+    assert len(assets) >= 2
+    font_count = 0
+    for asset in assets:
+        response = client.get(asset)
+        assert response.status_code == 200 and response.content
+        if asset.endswith('.css'):
+            fonts = set(re.findall(r'url\((/assets/[^)]+\.woff2)\)', response.text))
+            assert fonts, 'CSS sem fontes locais'
+            for font in fonts:
+                assert client.get(font).status_code == 200
+            font_count += len(fonts)
+    print(json.dumps({'offline': True, 'active': stats['videos'], 'trash': stats['deleted_videos'],
+                      'jobs': tasks['total'], 'assets': len(assets), 'font_files': font_count}))
+'''
+
+
+def docker(*args: str, timeout: int = 70) -> str:
+    result = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+    if result.returncode:
+        raise RuntimeError(f"docker {args[0]} falhou: {result.stderr.strip() or result.stdout.strip()}")
+    return result.stdout.strip()
+
+
+def api(path: str, method: str = "GET", body=None):
+    # Docker Desktop can block host-published ports on internal networks. Keep
+    # outbound isolation and exercise the live HTTP server from its loopback.
+    assert CONTAINER is not None
+    return json.loads(docker("exec", CONTAINER, "python", "-c", API_REQUEST, path, method, json.dumps(body)))
+
+
+def ready(total: int = 2):
+    deadline = time.monotonic() + 40
+    while time.monotonic() < deadline:
+        try:
+            stats = api("/stats")
+            if stats["videos"] + stats["deleted_videos"] == total and not stats["scanning"]:
+                return
+        except (RuntimeError, OSError):
+            pass
+        time.sleep(.3)
+    raise AssertionError("O container sintético não concluiu a importação")
+
+
+def main() -> int:
+    global CONTAINER
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--image", default="youtube-catalog:local", help="Imagem já construída localmente; não será baixada")
+    args = parser.parse_args()
+    with socket.socket() as probe:
+        probe.settimeout(1)
+        if probe.connect_ex(("127.0.0.1", 8767)) == 0:
+            raise SystemExit("A porta 8767 está ocupada; nenhum recurso foi criado ou alterado.")
+    image_id = docker("image", "inspect", "--format", "{{.Id}}", args.image)
+    name = "youtube-catalog-volume-check-" + uuid.uuid4().hex[:12]
+    CONTAINER = name
+    volume, network = name + "-storage", name + "-network"
+    report = {"image": args.image, "image_id": image_id, "port": 8767,
+              "volume": volume, "network": "internal; offline phase: none",
+              "synthetic_sources_only": True, "job_worker_enabled": False,
+              "limits": "Confirma persistência queued/cancelled; não executa downloads ou transcrição real.",
+              "checks": [], "errors": []}
+    created_volume = created_network = False
+    common = ["--pull=never", "--read-only", "--tmpfs", "/tmp:rw,size=64m,mode=1777",
+              "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+              "--mount", f"type=volume,source={volume},target=/storage",
+              "-e", "DOWNLOAD_THUMBNAILS=false", "-e", "JOB_WORKER_ENABLED=false"]
+
+    def ok(message: str):
+        report["checks"].append(message)
+        print("OK " + message, flush=True)
+
+    def start_new():
+        docker("run", "-d", "--name", name, "--init", *common, "--network", network,
+               "-p", "127.0.0.1:8767:8765", image_id)
+        ready()
+
+    try:
+        docker("volume", "create", "--label", "youtube-catalog.test=synthetic-volume", volume)
+        created_volume = True
+        docker("network", "create", "--internal", "--label", "youtube-catalog.test=synthetic-volume", network)
+        created_network = True
+        assert docker("network", "inspect", "--format", "{{.Internal}}", network) == "true"
+        seed = json.loads(docker("run", "--rm", *common, "--network", "none", "--entrypoint", "python", image_id, "-c", SEED))
+        assert seed["files"] == 10
+        report["source_files"] = seed["files"]
+        print("Preparado: volume descartável, dez arquivos sintéticos e rede interna", flush=True)
+        start_new()
+        assert api("/stats")["videos"] == 2 and api("/jobs")["total"] == 0
+        ok("Volume nomeado novo importa somente dois vídeos sintéticos, sem rede externa")
+
+        category = api("/categories", "POST", {"name": "Preferência no volume"})
+        api(f"/categories/{category['id']}", "PATCH", {"name": "Preferência persistente"})
+        chosen = api(f"/videos/{TRASH}/categories", "PUT", {"category_ids": [category["id"]]})
+        queued = api("/jobs", "POST", {"url": "https://www.youtube.com/watch?v=abcdefghijk", "kind": "video", "language": "en"})
+        cancelled = api("/jobs", "POST", {"url": "https://www.youtube.com/playlist?list=PLsynthetic_volume_test", "kind": "playlist", "language": "es"})
+        cancelled = api(f"/jobs/{cancelled['id']}/cancel", "POST")
+        assert queued["status"] == "queued" and cancelled["status"] == "cancelled"
+        api(f"/videos/{TRASH}", "DELETE")
+        expected = {"categories": chosen["categories"], "added_at": chosen["added_at"],
+                    "deleted_at": api("/videos?deleted=true")["items"][0]["deleted_at"],
+                    "jobs": {queued["id"]: "queued", cancelled["id"]: "cancelled"},
+                    "thumbnail_sha256": seed["thumbnail_sha256"]}
+
+        def assert_saved():
+            stats = api("/stats")
+            assert (stats["videos"], stats["deleted_videos"]) == (1, 1)
+            assert [v["id"] for v in api("/videos")["items"]] == [KEEP]
+            trash = api("/videos?deleted=true")
+            assert trash["total"] == 1 and trash["items"][0]["id"] == TRASH
+            assert trash["items"][0]["deleted_at"] == expected["deleted_at"]
+            assert trash["items"][0]["categories"] == expected["categories"]
+            jobs = api("/jobs")
+            assert jobs["total"] == 2 and {j["id"]: j["status"] for j in jobs["items"]} == expected["jobs"]
+            for job_id, status in expected["jobs"].items():
+                detail = api("/jobs/" + job_id)
+                assert detail["status"] == status and not detail["items"]
+                assert detail["language"] == ("en" if status == "queued" else "es")
+                assert detail["kind"] == ("video" if status == "queued" else "playlist")
+            assert api(f"/videos/{KEEP}/segments")["total"] == 2
+            docker("exec", name, "python", "-c", VERIFY_FILES)
+
+        api("/scan", "POST")
+        ready()
+        assert_saved()
+        ok("Categorias, lixeira e tarefas queued/cancelled permanecem após reimportar")
+        docker("stop", "--time", "40", name)
+        docker("start", name)
+        ready()
+        assert_saved()
+        ok("Desligar e ligar preserva categorias, lixeira, fila e os dez arquivos de origem")
+        docker("stop", "--time", "40", name)
+        docker("rm", name)
+        start_new()
+        assert_saved()
+        ok("Recriar o container com o mesmo volume preserva dados, modelos e área de trabalho")
+        restored = api(f"/videos/{TRASH}/restore", "POST")
+        assert restored["category_override"] and restored["categories"] == expected["categories"]
+        assert restored["added_at"] == expected["added_at"] and restored["deleted_at"] is None
+        assert "Um método artificial." in restored["method"]
+        assert api(f"/videos/{TRASH}/segments")["total"] == 2
+        api(f"/videos/{TRASH}", "DELETE")
+        expected["deleted_at"] = api("/videos?deleted=true")["items"][0]["deleted_at"]
+        assert_saved()
+        ok("Restaurar após recriação recupera texto, método, data de inclusão e categorias editadas")
+        docker("stop", "--time", "40", name)
+        docker("rm", name)
+        offline = docker("run", "--rm", *common, "--network", "none", "--entrypoint", "python", image_id,
+                         "-c", OFFLINE, json.dumps(expected))
+        report["offline"] = json.loads(offline.splitlines()[-1])
+        ok("Sem rede: interface, fontes locais, busca sem acentos, leitura, downloads, capa e fila persistente")
+    except Exception as exc:
+        report["errors"].append(f"{type(exc).__name__}: {exc}")
+        print("FALHOU " + report["errors"][-1], file=sys.stderr, flush=True)
+        logs = subprocess.run(["docker", "logs", "--tail", "35", name], capture_output=True, text=True)
+        if logs.returncode == 0:
+            report["container_logs"] = logs.stdout + logs.stderr
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+        cleanup_errors = []
+        for kind, resource, created in (("network", network, created_network), ("volume", volume, created_volume)):
+            if created:
+                result = subprocess.run(["docker", kind, "rm", resource], capture_output=True, text=True)
+                if result.returncode:
+                    cleanup_errors.append(f"{resource}: {result.stderr.strip()}")
+        report["cleanup_errors"] = cleanup_errors
+        report["errors"].extend(cleanup_errors)
+        REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"Relatório: {REPORT}", flush=True)
+    return 1 if report["errors"] else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

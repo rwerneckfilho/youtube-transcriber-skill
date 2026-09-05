@@ -1,97 +1,113 @@
 # rw / ai · Catálogo de transcrições
 
-Sua biblioteca local de transcrições, com a identidade rw / ai, capas, navegação por canal e categoria, busca no texto e leitura das análises de método.
+Biblioteca local com capas, busca no texto, categorias e análises de método. Inclui uma fila para transcrever vídeos e playlists do YouTube no próprio Docker, sem serviço pago de transcrição. Interface em **português, inglês e espanhol**.
 
-## Abrir e desligar
+## Instalar, abrir e desligar
 
-1. Mantenha o **Docker Desktop** aberto.
-2. Abra **Iniciar.command** nesta pasta. Na primeira vez, a imagem será construída e as dependências serão baixadas.
-3. Acesse **http://localhost:8765**.
-4. Para desligar, abra **Parar.command** ou use **Stop** no projeto **youtube-catalog** do Docker Desktop. Use **Start** para voltar a ligar.
-
-O catálogo não inicia sozinho ao ligar o Docker. Os atalhos são para macOS. Caso o macOS peça confirmação para executar um atalho, use o menu contextual **Abrir**.
-
-Pelo terminal, depois da preparação inicial pelos atalhos:
+Requer Docker Desktop ou Docker Engine com Compose. A primeira construção baixa dependências e compila o motor local de transcrição.
 
 ```bash
-docker compose up -d       # ligar
-docker compose stop       # desligar
+# Dentro da pasta youtube-catalog, numa instalação nova:
+cp .env.example .env
+docker compose up -d --build
+```
+
+Abra [localhost:8765](http://localhost:8765). No macOS, também é possível abrir **Iniciar.command** e **Parar.command**. Preserve um `.env` já configurado. O projeto **youtube-catalog** aparece no Docker Desktop e pode ser ligado ou desligado pelos botões habituais; não inicia automaticamente.
+
+```bash
+docker compose stop       # desligar e preservar a fila e a biblioteca
+docker compose start      # ligar novamente
 docker compose ps         # consultar o estado
 ```
 
-Para instalar pelo terminal no macOS ou Linux, a partir desta pasta:
+A porta é publicada apenas em `127.0.0.1`, sem login. Se quiser trocar a porta, altere `CATALOG_PORT` no `.env` e execute `docker compose up -d`.
+
+## Adicionar vídeos ou uma playlist
+
+1. Abra **Adicionar vídeos** e cole uma URL HTTPS de vídeo ou playlist do YouTube.
+2. Use a detecção automática, ou escolha explicitamente **Vídeo** ou **Playlist**. Um link de vídeo com `list=` usa a playlist no modo automático; escolher Vídeo processa somente o vídeo.
+3. Escolha o idioma falado: **Automático**, **Português**, **Inglês** ou **Espanhol**.
+4. Envie para a fila. Uma playlist é percorrida inteira e seus vídeos são transcritos um por vez. Os resultados entram no catálogo automaticamente.
+
+Acompanhe a etapa atual, as contagens e os resultados de cada vídeo. Itens privados, removidos ou com erro são sinalizados; os demais continuam. Vídeos já presentes, inclusive na Lixeira, não são sobrescritos. É possível cancelar um trabalho ou repetir os itens que falharam/foram cancelados. Lives ainda em andamento não são processadas.
+
+Ao desligar o Docker, o processamento para. A fila permanece no banco e retoma ao ligar; uma etapa incompleta pode ser reiniciada, preservando os vídeos já concluídos. A biblioteca continua disponível durante o processamento. Transcrições longas podem levar tempo, pois usam a CPU local. `WHISPER_THREADS` no `.env` permite ajustar o número de threads.
+
+O motor usa yt-dlp, ffmpeg e Whisper.cpp, com o modelo multilíngue `large-v3-turbo-q5_0`. O primeiro trabalho baixa aproximadamente 547 MiB de modelo e confere seu SHA-256; o arquivo fica em cache no volume. Não é necessário token de API. O idioma escolhido informa o idioma do áudio: não traduz a transcrição nem altera o conteúdo original.
+
+## Idioma e navegação
+
+O seletor de idioma alterna toda a interface entre PT, EN e ES e guarda a preferência neste navegador. Títulos, transcrições, categorias criadas pelo usuário e análises mantêm seu conteúdo original.
+
+- **Início:** recentes e prateleiras por canal ou categoria.
+- **Todos os vídeos:** busca combinada com canal, categoria, idioma e ordenação. Resultados levam ao trecho correspondente.
+- **Transcrição:** texto com timestamps, busca interna, falantes quando disponíveis e carregamento progressivo.
+- **Método:** análise existente em `METODO.md`, quando disponível. Novas transcrições não geram análises automaticamente.
+- **Arquivos:** TXT, SRT e JSON, incluindo versões com falantes quando já existirem.
+- **Categorias:** criar, renomear e atribuir vários temas; sugestões locais só são aplicadas quando selecionadas.
+- **Lixeira:** Excluir do catálogo preserva os arquivos; Restaurar recupera o vídeo com suas categorias. Excluir definitivamente exige digitar EXCLUIR e apaga os arquivos daquele vídeo no armazenamento do Docker. Após uma falha parcial, a Lixeira permite confirmar novamente para concluir; a remoção física não é retomada automaticamente.
+
+## Banco de dados e conteúdos dentro do Docker
+
+O volume nomeado **youtube-catalog-storage** guarda toda a biblioteca. Ele é gerenciado pelo Docker e permanece no computador mesmo quando o container é parado, atualizado ou recriado:
+
+| Dentro do container | Conteúdo |
+| --- | --- |
+| `/storage/catalog/catalog.sqlite3` | Banco SQLite: metadados, transcrições segmentadas, índice FTS5, métodos, categorias, Lixeira e fila |
+| `/storage/transcripts/` | Arquivos de cada vídeo: `video.json`, TXT, SRT, JSON e demais originais importados |
+| `/storage/catalog/thumbnails/` | Capas locais |
+| `/storage/models/` | Modelo de transcrição verificado |
+| `/storage/work/` | Trabalho incompleto e arquivos temporários da fila |
+
+Não há dependência de uma pasta de transcrições no computador para usar a instalação nova. A variável `CATALOG_VOLUME` seleciona outro volume; trocar seu nome abre uma biblioteca diferente. **Não remova o volume nem execute `docker compose down -v` para simplesmente desligar**, pois isso apaga os dados persistentes.
+
+## Migrar a coleção da versão anterior
+
+Execute antes de iniciar uma biblioteca nova. A migração copia as fontes, as capas e o banco anterior, preservando categorias, métodos e Lixeira. As pastas antigas ficam intactas como cópia de segurança; passam a ser independentes da biblioteca no Docker. Alterações posteriores nessas pastas não são importadas automaticamente.
+
+Os caminhos padrão são `../yt-transcripts` e `./data`. Para outras pastas, defina `LEGACY_TRANSCRIPTS_DIR` e `LEGACY_DATA_DIR` no `.env`. Ambas precisam existir.
 
 ```bash
-mkdir -p data ../yt-transcripts
-printf 'LOCAL_UID=%s\nLOCAL_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+docker compose stop
+docker compose build
+docker compose -f compose.yaml -f compose.migrate.yaml run --rm --no-deps --user 0:0 --entrypoint python catalog /app/scripts/storage.py import-legacy --source /legacy/transcripts --data /legacy/data
+docker compose up -d
+```
+
+Se houver uma exclusão definitiva incompleta, conclua-a na Lixeira da versão anterior antes de migrar. O processo confere as cópias e a integridade do banco. Não sobrescreve um volume que já contenha uma biblioteca. Depois de concluído, repetir a migração não reimporta vídeos apagados. Uma cópia interrompida exige repetir explicitamente o comando; o aplicativo não inicia enquanto houver uma migração incompleta. Para importar uma coleção sem banco anterior, use uma pasta vazia como `LEGACY_DATA_DIR`.
+
+## Backup
+
+Desligue antes de copiar a biblioteca. Um backup inclui banco, conteúdos, fila e modelo:
+
+```bash
+docker compose stop
+mkdir -p backups
+docker compose run --rm --no-deps --user 0:0 --cap-add DAC_OVERRIDE --entrypoint python -v "$PWD/backups:/backup" catalog /app/scripts/storage.py backup /backup/biblioteca.tar.gz
+```
+
+Use um nome de arquivo novo a cada backup. O comando não sobrescreve backups anteriores. A pasta `backups/` fica fora do volume. Para restaurar, com o aplicativo desligado, extraia o arquivo em um **volume novo** e configure `CATALOG_VOLUME` para esse volume. Mantenha a propriedade dos arquivos em `1000:1000`, como na biblioteca original. Só remova a biblioteca anterior depois de conferir a restauração.
+
+## Internet e privacidade
+
+A instalação baixa dependências. Um trabalho solicitado acessa o YouTube para metadados e áudio; o primeiro uso também baixa o modelo do Hugging Face. Capas podem ser baixadas em segundo plano. Áudio e texto são processados localmente; não há envio a uma API de transcrição ou serviço de telemetria.
+
+Sem internet, é possível navegar, buscar, ler, editar categorias e baixar os arquivos já armazenados. Novos trabalhos podem falhar e ser repetidos quando a conexão voltar. As fontes da interface são locais. Para impedir novos downloads de capas, use `DOWNLOAD_THUMBNAILS=false` no `.env` e recrie o container.
+
+## Atualização e verificação
+
+```bash
 docker compose up -d --build
 ```
 
-Esse preparo é para uma instalação nova; preserve um `.env` já configurado. No Windows com Docker Desktop, crie as pastas `data` e `../yt-transcripts`, copie `.env.example` para `.env` e execute `docker compose up -d --build`.
-
-A coleção padrão fica em `../yt-transcripts`, ao lado desta pasta. Para usar uma coleção existente em outro lugar, defina `YOUTUBE_TRANSCRIPTS_DIR=/caminho/da/colecao` no `.env` e recrie o container. Não é necessário copiar as transcrições.
-
-## Como usar
-
-- **Início** mostra os recentes e prateleiras por categorias ou canais.
-- **Todos os vídeos** permite combinar busca, canal, categoria e idioma, e escolher a ordenação.
-- Abrir um resultado da busca leva ao trecho correspondente. Na página do vídeo, a aba **Transcrição** permite pesquisar no texto e carregar mais trechos. A aba **Método** mostra a análise já existente, quando disponível.
-- Baixe os arquivos originais nos botões TXT, SRT e JSON. Quando houver identificação de falantes, as duas variantes são disponibilizadas.
-- **Categorias** permite criar e renomear temas. Na página do vídeo, escolha várias categorias ou aceite sugestões. Restaurar a classificação importada remove somente a personalização daquele vídeo.
-- **Excluir do catálogo**, na página do vídeo, abre uma confirmação e envia o item para a **Lixeira**. Ele sai das prateleiras, da busca e das contagens e continua excluído após atualizações e reinicializações.
-- Na **Lixeira**, use **Restaurar** para devolver o vídeo ao catálogo, com suas categorias preservadas. A exclusão não apaga as transcrições, análises ou demais arquivos de origem.
-- **Excluir definitivamente**, também na Lixeira, pede que você digite **EXCLUIR** antes de confirmar. Essa ação apaga a pasta original inteira daquele vídeo, incluindo transcrições, análises e arquivos de áudio ou vídeo, e remove seus dados e capa do catálogo. Não pode ser desfeita pela interface; recuperação depende de um backup anterior. Os demais vídeos e categorias permanecem salvos.
-- Se a exclusão definitiva for interrompida por uma falha de arquivo, o item permanece na Lixeira com um aviso. Confirme novamente para concluir a limpeza. Após o início da remoção física, **Restaurar** fica indisponível; a limpeza não é retomada automaticamente ao ligar o aplicativo.
-- O botão de atualização relê a coleção. A atualização também acontece ao iniciar e a cada 60 segundos enquanto o aplicativo estiver ligado.
-
-## Onde ficam os dados
-
-- **Originais:** a pasta configurada em `YOUTUBE_TRANSCRIPTS_DIR`, por padrão a vizinha `../yt-transcripts`. A montagem permite escrita para a exclusão definitiva confirmada na Lixeira. A importação e a leitura dos vídeos não modificam esses arquivos. Novas transcrições continuam sendo geradas pelo fluxo que você já utiliza.
-- **Catálogo:** `data/` nesta pasta, contendo o banco local, suas classificações e as capas baixadas. Parar ou recriar o container preserva essa pasta.
-- **Configuração:** `.env`, criado pelo atalho com o usuário do computador. A porta padrão é `8765`.
-
-As categorias e tags vêm dos arquivos `METODO.md`; os metadados vêm de `video.json`. As sugestões são calculadas localmente e só mudam a classificação quando você as escolhe. Vídeos sem categorias aparecem em **Sem categoria**. Alterações feitas na interface prevalecem sobre reimportações. A lixeira também fica no banco local e faz parte do backup da pasta `data/`.
-
-Se um arquivo estiver incompleto durante a gravação, o aplicativo mantém a última versão válida e mostra um aviso. Se a pasta de um vídeo desaparecer, ele permanece identificado como indisponível, com suas classificações preservadas.
-
-## Internet e uso offline
-
-A construção inicial requer internet para baixar as dependências. Durante o uso, somente as capas são baixadas automaticamente, a partir dos endereços de miniaturas do YouTube. Textos, classificações e consultas ficam no computador. A interface usa arquivos e fontes locais; não há serviços de análise, transcrição ou telemetria externos.
-
-Depois de salvas, as capas continuam disponíveis offline. Se uma imagem não puder ser obtida, será exibida uma capa substituta. Abrir um vídeo no YouTube exige internet.
-
-Para impedir novos downloads de capas, altere `DOWNLOAD_THUMBNAILS=false` em `.env` e execute `docker compose up -d`. As capas já salvas continuarão visíveis.
-
-## Atualizar o aplicativo
-
-Depois de alterar o código:
-
-```bash
-docker compose up -d --build
-```
-
-Para outra porta, altere `CATALOG_PORT` em `.env` e execute `docker compose up -d`. A publicação continua restrita a `127.0.0.1`.
-
-## Backup e restauração
-
-1. Desligue o catálogo com **Parar.command** ou `docker compose stop`.
-2. Copie a pasta **data**, o arquivo **.env** e a coleção **yt-transcripts** para o local do backup.
-3. Para restaurar no mesmo computador, mantenha o catálogo desligado e substitua esses itens pelas cópias salvas; depois inicie novamente.
-
-Em outro computador, preserve a disposição das pastas e recrie `.env` pelo atalho para usar o novo usuário. O banco utiliza SQLite e permanece no disco do computador. Nenhum backup externo é feito automaticamente.
-
-## Desenvolvimento e verificação
-
-Interface React/TypeScript/Vite compilada e servida por FastAPI, com SQLite FTS5. Um processo de servidor e um serviço Docker. O contrato da API está em `CONTRACT.md`.
+O volume é reutilizado. Banco, modelos e conteúdos não fazem parte do repositório. Para investigar inicialização, use `docker compose logs --tail=80`.
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.lock
-.venv/bin/python -m pytest backend/tests -q
-python3 tests/acceptance.py --url http://127.0.0.1:8765 --source ../yt-transcripts
-python3 tests/docker-lifecycle.py
+.venv/bin/python -m pytest backend/tests tests/test_storage.py -q
 ```
 
-O último teste usa um container temporário na porta `8766` e uma cópia descartável do banco para verificar edição de categorias, desligamento, recriação e funcionamento sem rede. Ele preserva o catálogo principal. Os testes de navegador estão documentados em `tests/README.md`.
+O contrato da API está em [CONTRACT.md](CONTRACT.md). Os roteiros de teste, incluindo idioma, playlists, exclusão e persistência, estão em [tests/README.md](tests/README.md). As verificações destrutivas usam dados descartáveis.
 
-Para consultar falhas de inicialização, use `docker compose logs --tail=80`. Confirme que `../yt-transcripts` existe e que a porta configurada está livre. Na primeira importação, aguarde a atualização terminar antes de conferir as contagens.
+Referências: [Whisper.cpp](https://github.com/ggml-org/whisper.cpp), [yt-dlp](https://github.com/yt-dlp/yt-dlp), [volumes do Docker](https://docs.docker.com/engine/storage/volumes/).

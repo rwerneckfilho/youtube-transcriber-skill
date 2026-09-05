@@ -55,7 +55,10 @@ def main():
                   "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL",
                   "--security-opt", "no-new-privileges:true",
                   "-v", f"{PROJECT.parent / 'yt-transcripts'}:/transcripts:ro",
-                  "-v", f"{test_data}:/data", "-e", "DOWNLOAD_THUMBNAILS=false"]
+                  "-v", f"{test_data}:/data", "-e", "TRANSCRIPTS_DIR=/transcripts",
+                  "-e", "DATA_DIR=/data", "-e", "WORK_DIR=/tmp/jobs-work",
+                  "-e", "MODEL_DIR=/tmp/jobs-models", "-e", "JOB_WORKER_ENABLED=false",
+                  "-e", "DOWNLOAD_THUMBNAILS=false"]
         run_args = ["run", "-d", *common, "-p", "127.0.0.1:8766:8765", "youtube-catalog:local"]
         try:
             docker(*run_args)

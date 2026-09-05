@@ -58,6 +58,7 @@ async function check(name, work) {
 }
 async function contextFor(browser, base, allowWrites) {
   const context = await browser.newContext({ viewport: { width: 1600, height: 900 }, locale: 'pt-BR', reducedMotion: 'reduce' });
+  await context.addInitScript(() => localStorage.setItem('rw-ai.locale', 'pt'));
   await context.route('**/*', route => {
     const request = route.request(); const url = new URL(request.url());
     if (/^https?:$/.test(url.protocol) && url.origin !== new URL(base).origin) {

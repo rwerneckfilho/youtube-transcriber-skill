@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .catalog import Catalog, FILES, VIDEO_ID, PurgeConflict, safe_file
 from .thumbnails import FALLBACK, TYPES, ThumbnailManager
+from .jobs import JobError, JobQueue
 
 
 class CategoryName(BaseModel):
@@ -28,12 +29,19 @@ class PermanentDeletion(BaseModel):
     confirmation: str = Field(min_length=1, max_length=80)
 
 
-def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbnails=None, scan_interval=None, initial_scan=True) -> FastAPI:
+class JobSubmission(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+    language: Literal["auto", "pt", "en", "es"] = "auto"
+    kind: Literal["auto", "video", "playlist"] = "auto"
+
+
+def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbnails=None, scan_interval=None, initial_scan=True, start_jobs=None, work_dir=None, model_dir=None) -> FastAPI:
     source = Path(source_dir or os.getenv("TRANSCRIPTS_DIR", "/transcripts"))
     data = Path(data_dir or os.getenv("DATA_DIR", "/data"))
     static = Path(static_dir or os.getenv("STATIC_DIR", "/app/static")).resolve()
     enabled = download_thumbnails if download_thumbnails is not None else os.getenv("DOWNLOAD_THUMBNAILS", "true").lower() not in ("0", "false", "no")
     interval = max(1, float(scan_interval if scan_interval is not None else os.getenv("SCAN_INTERVAL_SECONDS", "60")))
+    jobs_enabled = start_jobs if start_jobs is not None else os.getenv("JOB_WORKER_ENABLED", "true").lower() not in ("false", "0", "no")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -42,8 +50,12 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
         catalog.thumbnail_manager = thumbnails
         app.state.catalog = catalog
         app.state.thumbnails = thumbnails
+        jobs = JobQueue(catalog, Path(work_dir or os.getenv("WORK_DIR", str(data / "work"))), Path(model_dir or os.getenv("MODEL_DIR", str(data / "models"))))
+        app.state.jobs = jobs
         if initial_scan:
             catalog.request_scan()
+        if jobs_enabled:
+            jobs.start()
 
         async def periodic():
             while True:
@@ -59,6 +71,7 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
                 await timer
             except asyncio.CancelledError:
                 pass
+            await asyncio.to_thread(jobs.close)
             catalog.stop.set()
             if catalog.scan_thread:
                 await asyncio.to_thread(catalog.scan_thread.join)
@@ -100,6 +113,44 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/jobs")
+    def jobs(page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100)):
+        return app.state.jobs.list(page, page_size)
+
+    @app.post("/api/jobs", status_code=202)
+    def submit_job(body: JobSubmission):
+        try:
+            return app.state.jobs.enqueue(body.url, body.language, body.kind)
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc), "error_code": "invalid_url"}, status_code=422)
+        except JobError as exc:
+            return JSONResponse({"detail": str(exc), "error_code": exc.code}, status_code=429)
+
+    @app.get("/api/jobs/{job_id}")
+    def job_detail(job_id: str):
+        result = app.state.jobs.detail(job_id)
+        if result is None:
+            raise HTTPException(404, "Tarefa não encontrada.")
+        return result
+
+    @app.post("/api/jobs/{job_id}/cancel")
+    def cancel_job(job_id: str):
+        try:
+            return app.state.jobs.cancel(job_id)
+        except KeyError as exc:
+            raise HTTPException(404, exc.args[0]) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post("/api/jobs/{job_id}/retry")
+    def retry_job(job_id: str):
+        try:
+            return app.state.jobs.retry(job_id)
+        except KeyError as exc:
+            raise HTTPException(404, exc.args[0]) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.get("/api/stats")
     def stats():

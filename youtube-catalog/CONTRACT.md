@@ -1,6 +1,24 @@
 # Interface local do catálogo
 
-All API endpoints are same-origin under `/api`. JSON field names below are the integration contract. All user-facing text is Portuguese.
+All API endpoints are same-origin under `/api`. JSON field names below are the integration contract. Portuguese is the default interface language.
+
+## Transcription queue and languages
+
+The interface is localized in Portuguese, English and Spanish. Browser preference `rw-ai.locale` stores `pt`, `en` or `es`; transcript and metadata content is not translated. Queue errors include stable `error_code` values for localized display.
+
+- `POST /api/jobs` body `{url,kind:"auto"|"video"|"playlist",language:"auto"|"pt"|"en"|"es"}` returns202 JobDetail. URLs must be HTTPS YouTube video/playlist links. Auto resolves a watch URL with a list parameter to the whole playlist; explicit video processes only the video. Repeated submissions of the same active URL/kind/language return its existing job.
+- `GET /api/jobs?page=1&page_size=10`: `{items:Job[],total,page,page_size}`.
+- `GET /api/jobs/{id}`: JobDetail with every discovered item and the latest200 log entries.
+- `POST /api/jobs/{id}/cancel`: requests cancellation, preserving completed videos. Returns JobDetail.
+- `POST /api/jobs/{id}/retry`: queues failed/cancelled items again, preserving successful ones. Only failed/partial/cancelled jobs are accepted. Returns JobDetail.
+- Job: `{id,url,kind,language,title,status,stage,total,completed,failed,skipped,cancel_requested,created_at,updated_at,error,error_code}`.
+- JobDetail adds `items:[{id,position,video_id,title,status,stage,error,error_code,updated_at}]` and `logs:[{id,time,stage,message}]`.
+- Job statuses: `queued`, `discovering`, `running`, `completed`, `partial`, `failed`, `cancelled`. Item statuses: `queued`, `running`, `completed`, `failed`, `skipped`, `cancelled`.
+- Stages: `queued`, `discovering`, `model`, `downloading`, `converting`, `transcribing`, `publishing`, `completed`, `failed`, `cancelled`.
+
+A single worker enumerates the entire playlist and processes items serially. Unavailable items and per-video failures do not stop the rest. Valid existing videos, including trash entries, are retained rather than overwritten. Incomplete conflicting folders produce an explicit item error. SQLite stores queue state; container shutdown stops process groups and unfinished work resumes when started. Cancellation persists. Complete artifacts are validated and published atomically under the catalog scan lock before becoming visible. No paid or hosted transcription API is used.
+
+Docker uses volume `youtube-catalog-storage` by default. SQLite and searchable transcript segments are under `/storage/catalog/`; original artifacts are under `/storage/transcripts/`; model and unfinished work use `/storage/models/` and `/storage/work/`. Migration from a previous bind-mounted collection is explicit and non-destructive to the old folders. See `scripts/storage.py`.
 
 ## Excluir e restaurar
 
@@ -10,7 +28,7 @@ All API endpoints are same-origin under `/api`. JSON field names below are the i
 - `GET /api/videos?deleted=true` lists only deleted videos, with the same pagination and search contract. Default is active only. Trash default order is most recently deleted first (when sort=added). Thumbnail URLs continue to work in trash, but direct details/segments/downloads of deleted videos return404 until restored.
 - Stats gain `deleted_videos`. All existing counts, channel/category counts and regular search exclude deleted videos. Categories themselves remain available even with count0. Trash UI has restore buttons and page-level explanation that originals were preserved.
 - UI confirmation button `Excluir do catálogo` on a video detail opens a native accessible dialog explaining the source files are preserved. Success navigates to active catalog with a message. Sidebar `Lixeira` opens deleted list.
-- `DELETE /api/videos/{id}/permanent` body `{confirmation: id}` permanently removes a trashed video, its original folder (including media), transcript indexes, custom assignments and cached thumbnail. It returns `{id,permanently_deleted:true}`. Active videos are rejected with409; an incorrect confirmation is rejected with422. The UI requires typing `EXCLUIR` in an explicit irreversible-action dialog before submitting the ID. Source directories are never taken from client paths; symlinks must not be followed. The source mount must allow writes. A failed physical removal must return a visible error rather than claim success.
+- `DELETE /api/videos/{id}/permanent` body `{confirmation: id}` permanently removes a trashed video, its original folder (including media), transcript indexes, custom assignments and cached thumbnail. It returns `{id,permanently_deleted:true}`. Active videos are rejected with409; an incorrect confirmation is rejected with422. The UI requires typing `EXCLUIR`, `DELETE` or `ELIMINAR` according to its language in an explicit irreversible-action dialog before submitting the ID. Source directories are never taken from client paths; symlinks must not be followed. The source mount must allow writes. A failed physical removal must return a visible error rather than claim success.
 - Summary fields `purge_pending:boolean` and `purge_error:string|null` identify an incomplete permanent removal. Filesystem failure returns503 and keeps the trashed entry visible; a new explicit permanent-delete confirmation retries cleanup. Restore returns409 after the physical operation has started. Startup never resumes destructive work automatically. The scanner skips pending removals. The operation journal persists in SQLite across restarts.
 
 - `GET /api/health`: `{status: "ok"}`.

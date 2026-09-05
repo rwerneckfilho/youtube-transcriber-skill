@@ -8,9 +8,8 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 if [ ! -f .env ]; then
-  printf 'LOCAL_UID=%s\nLOCAL_GID=%s\nCATALOG_PORT=8765\nDOWNLOAD_THUMBNAILS=true\n' "$(id -u)" "$(id -g)" > .env
+  cp .env.example .env
 fi
-mkdir -p data ../yt-transcripts
 docker compose up -d
 catalog_port=$(awk -F= '$1 == "CATALOG_PORT" {print $2}' .env)
 catalog_url="http://localhost:${catalog_port:-8765}"

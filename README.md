@@ -4,26 +4,25 @@ Skill para o Codex que baixa o áudio de um vídeo do YouTube e gera uma transcr
 
 Não usa API paga. Na primeira execução, o script baixa o modelo multilíngue `large-v3-turbo-q5_0` para o cache local e valida seu checksum SHA-256. Todo o processamento de áudio, transcrição e diarização acontece na máquina local.
 
-O repositório também inclui a plataforma **[rw / ai · Catálogo de transcrições](youtube-catalog/README.md)**: um aplicativo local no Docker para explorar as transcrições por capas, canais e categorias, pesquisar no texto, ler métodos, baixar arquivos e gerenciar a Lixeira.
+O repositório também inclui a plataforma **[rw / ai · Catálogo de transcrições](youtube-catalog/README.md)**: um aplicativo local no Docker para explorar as transcrições por capas, canais e categorias, pesquisar no texto, ler métodos, baixar arquivos e gerenciar a Lixeira. A aba **Adicionar vídeos** transcreve vídeos e playlists completas no Docker; a interface está disponível em português, inglês e espanhol.
 
 ## Plataforma de catálogo no Docker
 
-Requer Docker Desktop ou Docker Engine com Compose. Depois de clonar o repositório, no macOS ou Linux:
+Requer Docker Desktop ou Docker Engine com Compose. Quem já usa a versão anterior deve seguir primeiro a [migração do acervo](youtube-catalog/README.md#migrar-a-coleção-da-versão-anterior). Para uma instalação nova, depois de clonar o repositório, no macOS ou Linux:
 
 ```bash
 cd youtube-transcriber-skill/youtube-catalog
-mkdir -p data ../yt-transcripts
-printf 'LOCAL_UID=%s\nLOCAL_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+cp .env.example .env
 docker compose up -d --build
 ```
 
 Abra [localhost:8765](http://localhost:8765). Esses passos preparam uma instalação nova; preserve um `.env` já configurado. No macOS também há os atalhos **Iniciar.command** e **Parar.command**. Para Windows e outras opções, consulte as [instruções da plataforma](youtube-catalog/README.md).
 
-O catálogo lê `yt-transcripts/` na raiz do repositório. Para uma coleção existente em outro local, configure `YOUTUBE_TRANSCRIPTS_DIR` no `.env` da plataforma. O mesmo nome de variável pode ser exportado no terminal para que a skill grave as novas transcrições nessa coleção.
+O volume Docker **youtube-catalog-storage** armazena o banco SQLite, os conteúdos, as capas, a fila e o modelo. Para trazer a coleção da versão anterior, siga a [migração antes da primeira inicialização](youtube-catalog/README.md#migrar-a-coleção-da-versão-anterior). Ela copia as pastas antigas sem alterá-las; a biblioteca no Docker passa a ser independente delas. A skill de linha de comando continua disponível separadamente.
 
-O projeto **youtube-catalog** pode ser ligado e desligado no Docker. A porta fica restrita ao computador, os dados persistem na pasta local `youtube-catalog/data/` e as fontes da interface funcionam offline. A primeira instalação baixa dependências; durante o uso, os únicos acessos externos automáticos são os downloads das capas.
+O projeto **youtube-catalog** pode ser ligado e desligado no Docker. A porta fica restrita ao computador; o volume persiste quando o container é recriado. A leitura e a busca funcionam offline. Novos trabalhos acessam o YouTube e baixam o modelo no primeiro uso; as capas também podem ser baixadas em segundo plano. A transcrição é processada localmente, sem API paga. Ao ligar novamente, a fila retoma os trabalhos incompletos.
 
-**Excluir do catálogo** envia o vídeo para a Lixeira e preserva os originais. **Excluir definitivamente**, na Lixeira, exige uma confirmação e apaga a pasta original do vídeo, incluindo transcrições, análises e mídias. As coleções, capas, banco e configurações pessoais não fazem parte deste repositório.
+**Excluir do catálogo** envia o vídeo para a Lixeira e preserva os originais. **Excluir definitivamente**, na Lixeira, exige uma confirmação e apaga a pasta do vídeo no armazenamento do Docker, incluindo transcrições, análises e mídias importadas. As coleções, capas, banco e configurações pessoais não fazem parte deste repositório.
 
 ## Requisitos
 

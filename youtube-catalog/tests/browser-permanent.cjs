@@ -89,6 +89,7 @@ async function step(name, work) {
   const keptSegments = await api(`/videos/${keepId}/segments`);
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({ viewport: { width: 1366, height: 900 }, reducedMotion: 'reduce', locale: 'pt-BR' });
+  await context.addInitScript(() => localStorage.setItem('rw-ai.locale', 'pt'));
   await context.route('**/*', route => {
     const request = route.request(); const url = new URL(request.url());
     if (/^https?:$/.test(url.protocol) && url.origin !== endpoint.origin) {

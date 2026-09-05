@@ -341,6 +341,12 @@ class Acceptance:
             assert segment["speaker"] == original[first_speaker_index]["speaker"]
             filenames = {entry["filename"] for entry in detail["downloads"]}
             assert {"transcript.json", "transcript.srt", "transcript.txt", "transcript-speakers.json", "transcript-speakers.srt", "transcript-speakers.txt"} <= filenames
+        # Downloads remain part of acceptance even when the only speaker example
+        # has intentionally been moved to Trash.
+        for video_id in speaker_ids or [next(iter(self.records))]:
+            detail = self.json(f"/api/videos/{video_id}")
+            filenames = {entry["filename"] for entry in detail["downloads"]}
+            assert {"transcript.json", "transcript.srt", "transcript.txt"} <= filenames
             for entry in detail["downloads"]:
                 path = self.records[video_id]["directory"] / entry["filename"]
                 assert path.parent == self.records[video_id]["directory"] and path.is_file()
