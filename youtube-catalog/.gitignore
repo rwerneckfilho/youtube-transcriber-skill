@@ -1,0 +1,11 @@
+data/
+.env
+.venv/
+frontend/node_modules/
+frontend/dist/
+**/__pycache__/
+**/.pytest_cache/
+**/*.tsbuildinfo
+*.log
+.DS_Store
+VERIFICACAO.md
