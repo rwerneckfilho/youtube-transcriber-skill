@@ -17,6 +17,10 @@ services:
       SCAN_INTERVAL_SECONDS: "60"
       DOWNLOAD_THUMBNAILS: "${DOWNLOAD_THUMBNAILS:-true}"
       WHISPER_THREADS: "${WHISPER_THREADS:-4}"
+      OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
+      SKILL_MODEL: "${SKILL_MODEL:-}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - storage:/storage
     read_only: true

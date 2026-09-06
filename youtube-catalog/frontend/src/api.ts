@@ -8,11 +8,14 @@ export type Stats = { videos: number; deleted_videos: number; channels: number; 
 export type Segment = { index: number; start_ms: number; end_ms: number; text: string; speaker: string | null };
 export type Page = { items: Video[]; total: number; page: number; page_size: number };
 export type SegmentPage = { items: Segment[]; total: number; offset: number; limit: number };
+export class ApiError extends Error {
+  constructor(message: string, public code?: string, public status?: number) { super(message); this.name = 'ApiError'; }
+}
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   let response: Response;
   try { response = await fetch(`/api${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } }); }
   catch { throw new Error('Não foi possível conectar ao aplicativo. Verifique se ele está ligado no Docker.'); }
-  if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(apiError(error.detail, error.error_code, response.status)); }
+  if (!response.ok) { const error = await response.json().catch(() => ({})); throw new ApiError(apiError(error.detail, error.error_code, response.status), error.error_code, response.status); }
   return response.json();
 }
 export function useApi<T>(path: string, version = 0) {

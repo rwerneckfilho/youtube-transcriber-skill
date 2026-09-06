@@ -2,6 +2,8 @@
 
 A local library with video thumbnails, full-text search, categories, and method analyses. Includes a queue for transcribing YouTube videos and playlists within Docker, with no paid transcription service. The interface supports **Portuguese, English, and Spanish**.
 
+**Generate skill** combines selected videos into one downloadable Agent Skills package, using a local Ollama model. Suggested combinations help you find related methods in the library.
+
 ## Install, open, and stop
 
 Requires Docker Desktop or Docker Engine with Compose. The first build downloads dependencies and compiles the local transcription engine.
@@ -45,6 +47,7 @@ The language selector switches the entire interface between PT, EN, and ES and s
 - **Method:** an existing analysis from `METODO.md`, when available. New transcriptions do not generate analyses automatically.
 - **Your files:** TXT, SRT, and JSON, including existing versions with speaker labels.
 - **Categories:** create, rename, and assign multiple topics; local suggestions are applied only when selected.
+- **Generate skill:** explore suggested combinations or select one to eight videos, describe the desired task, choose an output language, and generate a single skill. Review the preview and download the ZIP package from the saved history.
 - **Trash:** Remove from catalog preserves the files; Restore video brings the video back with its categories. Delete permanently requires typing `DELETE` in English (`EXCLUIR` in Portuguese or `ELIMINAR` in Spanish) and erases that video's files from Docker storage. After a partial failure, Trash lets you confirm again to finish; physical deletion never resumes automatically.
 
 ## Database and content inside Docker
@@ -53,7 +56,7 @@ The named volume **youtube-catalog-storage** holds the entire library. Docker ma
 
 | Inside the container | Content |
 | --- | --- |
-| `/storage/catalog/catalog.sqlite3` | SQLite database: metadata, transcript segments, FTS5 index, methods, categories, Trash, and queue |
+| `/storage/catalog/catalog.sqlite3` | SQLite database: metadata, transcript segments, FTS5 index, methods, categories, Trash, queues, skill source snapshots and generated packages |
 | `/storage/transcripts/` | Files for each video: `video.json`, TXT, SRT, JSON, and other imported originals |
 | `/storage/catalog/thumbnails/` | Local thumbnails |
 | `/storage/models/` | Verified transcription model |
@@ -93,6 +96,23 @@ Use a new filename for each backup. The command does not overwrite earlier backu
 Installation downloads dependencies. A requested job accesses YouTube for metadata and audio; first use also downloads the model from Hugging Face. Thumbnails may download in the background. Audio and text are processed locally, with no uploads to a transcription API or telemetry service.
 
 Without internet, you can browse, search, read, edit categories, and download files already stored in the library. New jobs may fail and can be retried when the connection returns. Interface fonts are local. To prevent new thumbnail downloads, set `DOWNLOAD_THUMBNAILS=false` in `.env` and recreate the container.
+
+## Generate a skill from several videos
+
+Open **Generate skill** from the sidebar, home page, or a video's detail page. The opening screen suggests two-to-four-video combinations using specific tags, title terms, method notes, and category context. The suggestions are local similarity heuristics, not a guarantee that a procedure will work. You can change the selection before generating. Videos in Trash, missing sources, and videos without transcript segments are excluded.
+
+Generation requires **Ollama running locally with an installed text-generation model**. On Docker Desktop, the app connects to `http://host.docker.internal:11434`; it does not install Ollama, download models, or use paid or cloud inference. If a suitable local model is already installed, no setup is needed. Otherwise install [Ollama](https://ollama.com/download) and a local model appropriate for your computer. Model installation is a separate download. `SKILL_MODEL` in `.env` can select the exact installed model name; an empty value selects an eligible installed model automatically. The status panel explains when Ollama or a model is unavailable. Docker Engine users must make their local Ollama service reachable from the container; `OLLAMA_URL` accepts loopback, `host.docker.internal`, or an `ollama` service name, never a public inference endpoint.
+
+1. Choose a suggested combination or search the catalog and select **one to eight videos**.
+2. Optionally give the skill a title and explain the concrete task it should perform. Choose Portuguese, English, or Spanish for the output.
+3. Generate the skill and follow its progress. You can cancel, retry a failed job, or return later. Interrupted jobs are queued again after restarting Docker.
+4. Review the skill and download its ZIP. Extract its top-level folder into the skills directory supported by your agent. Installation and execution are manual; the catalog never installs or runs the generated skill.
+
+The ZIP contains `SKILL.md`, a source index, verification notes, and the selected videos' full timestamped transcripts and existing method analyses as references. Every procedure step cites an existing transcript segment, and every selected video must contribute to the procedure. Long transcripts use bounded excerpts selected across the recording for synthesis; the UI and package disclose this, while preserving the complete source text in the references. This is text-based synthesis: visual steps that appear only on screen cannot be recovered from the transcript alone.
+
+Each step shows the rule extracted from its sources alongside literal quotations. Validation checks structure, source participation, quotation matches, obvious promotional citations, and clearly predominant use of the wrong output language. These checks **do not prove that the model's interpretations are correct or that the skill succeeds on a real task**. Review dependencies and try a representative task before relying on the output. Generated packages contain documentation only; they do not include automatically generated executable scripts.
+
+Skill jobs retain their source snapshots and generated packages independently. Deleting an original video does not erase copies already included in a generated skill. These records are included in the catalog database backup. Ollama's separately installed models are outside the catalog's Docker volume and backup. Once those models are installed, generation works without an internet connection while Ollama is running.
 
 ## Update and verify
 

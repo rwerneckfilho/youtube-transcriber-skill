@@ -48,6 +48,23 @@ Docker uses the `youtube-catalog-storage` volume by default. SQLite and searchab
 - `GET /api/videos/{id}/files/{filename}`: downloads an allowlisted original artifact; arbitrary filesystem paths are not accepted.
 - Errors: non-2xx responses with `{detail: string}`.
 
+## Combined video-to-skill generation
+
+- `GET /api/skills/status`: `{available,model:string|null,models:string[],error_code?,message?}`. Checks an installed local Ollama model; never downloads a model or selects cloud inference.
+- `GET /api/skills/suggestions?language=pt`: `{items,total}`. Each item contains `{id,title,description,reason,video_ids,videos:Video[],shared_tags,category:string|null}`. Two-to-four-source groups use weighted content similarity and distinct contributions; category membership alone is insufficient. There are at most eight suggestions, with PT/EN/ES explanatory copy.
+- `POST /api/skills` with `{video_ids:string[],title?:string,objective?:string,language:"pt"|"en"|"es"}` returns HTTP 202 with SkillJob. Select one to eight unique, available, non-trashed videos with transcripts. Title and objective limits are 120 and 2,000 characters. Repeated active submissions with the same video set, effective title, objective, and language return the existing job. A queue limit of 30 active jobs applies after deduplication.
+- `GET /api/skills?page=1&page_size=20`: `{items:SkillJob[],total,page,page_size}`; at most 100 items per page. Lists omit large package file bodies and source snapshots.
+- `GET /api/skills/{id}` returns SkillJob including `skill_markdown` and `files:[{path,content}]` when complete.
+- `POST /api/skills/{id}/cancel` requests cancellation; `POST /api/skills/{id}/retry` requeues failed or cancelled generation using the original snapshots.
+- `GET /api/skills/{id}/download.zip` returns a stored ZIP with one top-level skill folder. It accepts no client-controlled file path. Only `SKILL.md`, a bounded set of reference documents, and optional supported agent metadata can be packaged; no generated executable files.
+- SkillJob: `{id,title,objective,video_ids,language,status,stage,created_at,updated_at,progress,message,error_code,error,skill_name?,model?,validation?,warnings,download_url?}`. States: `queued`, `reading`, `generating`, `packaging`, `completed`, `failed`, `cancelled`.
+
+A separate single worker saves immutable source snapshots and generated packages in SQLite. No model call holds the catalog scan lock. Interrupted work is requeued on restart; a requested cancellation persists. Previously generated references remain in skill packages when an original video is removed. Downloads and completed history work without Ollama.
+
+The engine selects source passages across long transcripts, then synthesizes a constrained procedure through Ollama. Existing method notes help select passages, but are not substituted for transcript evidence in generation. Each step selects evidence, states its extracted rule, and then describes an action. It cites real segment IDs and a matching verbatim excerpt; all selected sources must participate. Narrow local checks also reject obvious promotional citations and clearly predominant wrong-language prose. Validation covers these conditions, not semantic correctness or actual execution success. Full source text and verification limits are included in reference files. Rendering does not execute source HTML or generated scripts.
+
+Runtime configuration: `OLLAMA_URL` defaults to `http://host.docker.internal:11434`, and only local endpoints are accepted. `SKILL_MODEL` optionally chooses an installed model; the default discovers a local text model. `SKILL_GENERATION_TIMEOUT` defaults to 900 seconds per generation attempt. A malformed output may be regenerated once. `SKILL_WORKER_ENABLED=false` disables skill job processing for isolated tests.
+
 ## Runtime
 
 Runtime environment variables: `TRANSCRIPTS_DIR` (default `/transcripts`), `DATA_DIR` (default `/data`), `STATIC_DIR` (default `/app/static`), `SCAN_INTERVAL_SECONDS` (default 60), and `DOWNLOAD_THUMBNAILS` (default true). The backend is `backend.app:app`; execute the Python module from the project root. The `create_app(...)` factory may support test isolation.

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from .catalog import Catalog, FILES, VIDEO_ID, PurgeConflict, safe_file
 from .thumbnails import FALLBACK, TYPES, ThumbnailManager
 from .jobs import JobError, JobQueue
+from .skills import SkillError, SkillQueue, recommendations
 
 
 class CategoryName(BaseModel):
@@ -35,13 +36,21 @@ class JobSubmission(BaseModel):
     kind: Literal["auto", "video", "playlist"] = "auto"
 
 
-def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbnails=None, scan_interval=None, initial_scan=True, start_jobs=None, work_dir=None, model_dir=None) -> FastAPI:
+class SkillSubmission(BaseModel):
+    video_ids: list[str] = Field(min_length=1, max_length=8)
+    title: str = Field(default="", max_length=120)
+    objective: str = Field(default="", max_length=2000)
+    language: Literal["pt", "en", "es"] = "pt"
+
+
+def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbnails=None, scan_interval=None, initial_scan=True, start_jobs=None, work_dir=None, model_dir=None, start_skills=None, skill_engine=None) -> FastAPI:
     source = Path(source_dir or os.getenv("TRANSCRIPTS_DIR", "/transcripts"))
     data = Path(data_dir or os.getenv("DATA_DIR", "/data"))
     static = Path(static_dir or os.getenv("STATIC_DIR", "/app/static")).resolve()
     enabled = download_thumbnails if download_thumbnails is not None else os.getenv("DOWNLOAD_THUMBNAILS", "true").lower() not in ("0", "false", "no")
     interval = max(1, float(scan_interval if scan_interval is not None else os.getenv("SCAN_INTERVAL_SECONDS", "60")))
     jobs_enabled = start_jobs if start_jobs is not None else os.getenv("JOB_WORKER_ENABLED", "true").lower() not in ("false", "0", "no")
+    skills_enabled = start_skills if start_skills is not None else os.getenv("SKILL_WORKER_ENABLED", "true").lower() not in ("false", "0", "no")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -52,10 +61,14 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
         app.state.thumbnails = thumbnails
         jobs = JobQueue(catalog, Path(work_dir or os.getenv("WORK_DIR", str(data / "work"))), Path(model_dir or os.getenv("MODEL_DIR", str(data / "models"))))
         app.state.jobs = jobs
+        skills = SkillQueue(catalog, skill_engine)
+        app.state.skills = skills
         if initial_scan:
             catalog.request_scan()
         if jobs_enabled:
             jobs.start()
+        if skills_enabled:
+            skills.start()
 
         async def periodic():
             while True:
@@ -71,6 +84,7 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
                 await timer
             except asyncio.CancelledError:
                 pass
+            await asyncio.to_thread(skills.close)
             await asyncio.to_thread(jobs.close)
             catalog.stop.set()
             if catalog.scan_thread:
@@ -96,7 +110,14 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request, exc):
-        return JSONResponse({"detail": "Dados inválidos. Confira os campos e os limites da solicitação."}, status_code=422)
+        result = {"detail": "Dados inválidos. Confira os campos e os limites da solicitação."}
+        if request.url.path.startswith("/api/skills"):
+            result["error_code"] = "invalid_input"
+        return JSONResponse(result, status_code=422)
+
+    @app.exception_handler(SkillError)
+    async def skill_error(request, exc):
+        return JSONResponse({"detail": str(exc), "error_code": exc.code}, status_code=exc.status)
 
     def catalog() -> Catalog:
         return app.state.catalog
@@ -113,6 +134,42 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/skills/status")
+    def skill_status():
+        return app.state.skills.status()
+
+    @app.get("/api/skills/suggestions")
+    def skill_suggestions(language: Literal["pt", "en", "es"] = "pt"):
+        return recommendations(catalog(), language)
+
+    @app.get("/api/skills")
+    def skills_list(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
+        return app.state.skills.list(page, page_size)
+
+    @app.post("/api/skills", status_code=202)
+    def submit_skill(body: SkillSubmission):
+        return app.state.skills.enqueue(body.video_ids, body.title, body.objective, body.language)
+
+    @app.get("/api/skills/{skill_id}")
+    def skill_detail(skill_id: str):
+        result = app.state.skills.detail(skill_id)
+        if result is None:
+            raise SkillError("not_found", "Skill não encontrada.", 404)
+        return result
+
+    @app.post("/api/skills/{skill_id}/cancel")
+    def cancel_skill(skill_id: str):
+        return app.state.skills.cancel(skill_id)
+
+    @app.post("/api/skills/{skill_id}/retry")
+    def retry_skill(skill_id: str):
+        return app.state.skills.retry(skill_id)
+
+    @app.get("/api/skills/{skill_id}/download.zip")
+    def skill_download(skill_id: str):
+        archive, filename = app.state.skills.download(skill_id)
+        return Response(archive, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
     @app.get("/api/jobs")
     def jobs(page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100)):

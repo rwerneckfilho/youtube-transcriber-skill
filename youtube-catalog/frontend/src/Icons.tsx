@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-export type IconName = 'home' | 'grid' | 'channels' | 'tag' | 'search' | 'refresh' | 'arrow' | 'left' | 'right' | 'book' | 'file' | 'external' | 'download' | 'close' | 'check' | 'clock' | 'plus' | 'edit' | 'folder' | 'alert' | 'filter' | 'trash' | 'restore';
+export type IconName = 'home' | 'grid' | 'channels' | 'tag' | 'search' | 'refresh' | 'arrow' | 'left' | 'right' | 'book' | 'file' | 'external' | 'download' | 'close' | 'check' | 'clock' | 'plus' | 'edit' | 'folder' | 'alert' | 'filter' | 'trash' | 'restore' | 'spark';
 export function Icon({ name, size = 20, className = '' }: {
     name: IconName;
     size?: number;
@@ -21,6 +21,7 @@ export function Icon({ name, size = 20, className = '' }: {
         close: <path d="m6 6 12 12M6 18 18 6"/>, check: <path d="m4 12 5 5L20 6"/>,
         clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
         plus: <path d="M12 4v16M4 12h16"/>,
+        spark: <><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z M20 2v4m-2-2h4"/></>,
         edit: <><path d="m15 3 6 6L8 22H2v-6ZM12 6l6 6"/></>,
         folder: <path d="M3 5h6l2 3h10v12H3Z"/>,
         alert: <><path d="m12 3 10 18H2Z M12 9v5"/><circle cx="12" cy="17.5" r=".5"/></>,

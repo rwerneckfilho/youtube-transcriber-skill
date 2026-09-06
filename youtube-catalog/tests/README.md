@@ -65,6 +65,19 @@ The runner covers video and playlist submission, transcription language selectio
 
 The report is saved to `/tmp/youtube-catalog-jobs-report.json`, with screenshots for each language. The preceding runners explicitly initialize their isolated browser contexts in Portuguese without changing the user's personal browser preference.
 
+## Combined skills
+
+`browser-skills.cjs` builds on a temporary static server and intercepts all API requests with isolated fixtures. It never changes the user's catalog or starts a real model request:
+
+```sh
+cd frontend && npm ci && npm run build && cd ..
+node tests/browser-skills.cjs
+```
+
+It checks suggestions, selecting up to eight videos, search without accidental submission, draft persistence, output languages, unavailable local models, generation/cancel/retry, history, ZIP download links, safe package previews and internal source navigation. It also checks PT/EN/ES and narrow screens. Screenshots and the report are written under `/tmp/youtube-catalog-skills-*`.
+
+The Python skill tests cover source snapshots, active-job deduplication, lifecycle/restart, cancellation races, local-only model selection, bounded evidence retrieval, literal quotation verification and package path restrictions. For a real inference check, use two authorized videos in an isolated catalog, run the local Ollama model, and inspect the generated procedure against its cited transcript passages. Then extract the ZIP and run the skill-format validator. A passing format or citation check must not be reported as successful execution on a downstream task.
+
 ## Named volume: entirely synthetic integration test
 
 With the image already built and port `8767` available, run:
