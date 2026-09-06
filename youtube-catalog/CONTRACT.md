@@ -20,6 +20,18 @@ A single worker enumerates the entire playlist and processes items serially. Una
 
 Docker uses the `youtube-catalog-storage` volume by default. SQLite and searchable transcript segments are under `/storage/catalog/`; original artifacts are under `/storage/transcripts/`; the model and unfinished work use `/storage/models/` and `/storage/work/`. Migration from a previous bind-mounted collection is explicit and leaves the old folders intact. See [scripts/storage.py](scripts/storage.py) and the [migration instructions](README.md#migrate-a-collection-from-the-previous-version).
 
+## Playlist subscriptions
+
+- `GET /api/watchers`: `{items,total}`. Source fields include `id,url,name,title,language,interval_minutes,initial_mode,enabled,initialized,status,created_at,updated_at,next_check,last_checked,last_success,last_error,error_code,failures,last_new,last_unavailable,last_job_id,known,pending,queued,baseline,recent`. Times are UTC ISO 8601. `queued` is the cumulative number handed to a queue, not the active count. `recent` contains up to ten `{video_id,title,detected_at,state,job_id,processing_status}` entries.
+- `POST /api/watchers`: `{url,name?:string,language?:"auto"|"pt"|"en"|"es",interval_minutes?:number,initial_mode?:"all"|"new",enabled?:boolean}` returns HTTP 201 `{id}`. Defaults: empty name, automatic language, 120 minutes, all current/future videos, enabled. Names are limited to 160 characters and intervals to 15–1,440 minutes. Only validated HTTPS YouTube playlist URLs are accepted and stored canonically. Duplicate sources or exceeding 50 sources returns 409.
+- `PATCH /api/watchers/{id}` updates any supplied `name,language,interval_minutes,enabled`; omitted settings are preserved. URL and initial mode are immutable. Resuming makes the source due immediately. Returns `{ok:true}`.
+- `POST /api/watchers/{id}/check` makes an enabled source due and returns HTTP 202 `{ok:true}`. Repeated requests during a check coalesce; paused sources return 409. Discovery is asynchronous.
+- `DELETE /api/watchers/{id}` returns `{ok:true}` and removes only the subscription and its seen-ID history. Catalog files, videos and previously created queue jobs are retained. Unknown IDs return 404.
+
+A single local monitor serializes metadata checks. It uses bounded `yt-dlp` subprocesses without a shell, credentials or login, and cancels discovery on shutdown. Discovery failure retains the last successful state and retries after 15, 30, 60, ... minutes up to the configured interval. A first successful `new` check, including an empty playlist, stores a baseline without queuing existing IDs. Unavailable and live entries are excluded from the baseline and reconsidered later.
+
+Discovery stores new IDs durably. Queue insertion and seen-state updates share one SQLite transaction. A source drains its current batch before submitting up to 100 more pending videos. Catalog entries (including Trash) and active queue items are reused. Seen IDs remain remembered if a video leaves/returns to the playlist or is deleted from the catalog. Failed/cancelled transcription requires explicit queue retry. There are no simultaneous metadata scans or automatic duplicate jobs for the same detected video. Settings and pending IDs survive container recreation in the named volume. Overdue checks resume when enabled workers restart. `PLAYLIST_WATCHER_ENABLED=false` disables the background monitor; this feature never creates a Codex automation.
+
 ## Delete and restore
 
 - Removing a video from the catalog hides it from the visible library; source files remain untouched. Video includes the persistent field `deleted_at: string|null`. Background imports do not restore deleted videos.

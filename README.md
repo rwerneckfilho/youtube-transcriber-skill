@@ -4,7 +4,7 @@ A Codex skill that downloads YouTube audio and creates complete local transcript
 
 No paid API is required. On its first run, the script downloads the multilingual `large-v3-turbo-q5_0` model to the local cache and verifies its SHA-256 checksum. Audio processing, transcription, and diarization all run on your computer.
 
-This repository also includes **[rw / ai · Transcript Catalog](youtube-catalog/README.md)**: a local Docker application for browsing transcripts by thumbnail, channel, and category, searching their text, reading method analyses, downloading files, and managing Trash. The **Add videos** tab transcribes individual videos and entire playlists in Docker. The interface supports English, Portuguese, and Spanish.
+This repository also includes **[rw / ai · Transcript Catalog](youtube-catalog/README.md)**: a local Docker application for browsing transcripts by thumbnail, channel, and category, searching their text, reading method analyses, downloading files, and managing Trash. The **Add videos** tab transcribes individual videos and entire playlists in Docker. **Follow playlists** checks saved playlists periodically and sends new videos to the local transcription queue. The interface supports English, Portuguese, and Spanish.
 
 The catalog's **Generate skill** workspace suggests related videos and combines your selection into one downloadable Agent Skills package. Synthesis uses an already installed local Ollama text model, with timestamped source references and a preview. No cloud inference or API key is required. See [local skill generation](youtube-catalog/README.md#generate-a-skill-from-several-videos) for setup and validation limits.
 

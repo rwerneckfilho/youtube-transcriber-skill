@@ -78,6 +78,14 @@ It checks suggestions, selecting up to eight videos, search without accidental s
 
 The Python skill tests cover source snapshots, active-job deduplication, lifecycle/restart, cancellation races, local-only model selection, bounded evidence retrieval, literal quotation verification and package path restrictions. For a real inference check, use two authorized videos in an isolated catalog, run the local Ollama model, and inspect the generated procedure against its cited transcript passages. Then extract the ZIP and run the skill-format validator. A passing format or citation check must not be reported as successful execution on a downstream task.
 
+## Playlist subscriptions
+
+`backend/tests/test_watchers.py` uses temporary collections, fake playlist metadata and a fake transcription pipeline. It covers the actual queue handoff, initial import/future-only baselines, empty and failed checks, incremental deduplication, cross-source deduplication, bounded batches, queue capacity, transaction rollback, failure backoff, pause/remove/shutdown races, concurrent checks, restart recovery, API validation and source removal without deleting queued work. Subprocess boundary checks use tiny local programs instead of YouTube requests.
+
+After building the frontend, run `node tests/browser-watchers.cjs`. The runner serves the compiled app at `127.0.0.1:18868` and intercepts every API response with in-memory fixtures. It verifies create/check/pause/resume/settings/remove flows, duplicate and lookup errors, recent transcript links, PT/EN/ES, and narrow screens. It does not start a real monitor, mutate the user's catalog, or allow external requests. The report and screenshots are under `/tmp/youtube-catalog-watchers-*`.
+
+The named-volume integration test also preserves a synthetic subscription and its seen-ID baseline through reimport, stop/start, recreation, and offline reading. A real playlist lookup and authorized transcription are separate integration checks; mocked tests do not prove YouTube availability.
+
 ## Named volume: entirely synthetic integration test
 
 With the image already built and port `8767` available, run:

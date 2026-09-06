@@ -1,3 +1,4 @@
+import { watchTranslations } from './watchTranslations';
 import { skillsTranslations } from './skillsTranslations';
 // Portuguese source strings are stable message keys. Video titles, transcripts and methods remain original.
 const rows: [string, string, string][] = [
@@ -51,3 +52,5 @@ Object.assign(translations, {
 'A fila está cheia. Aguarde alguns processamentos terminarem antes de adicionar mais vídeos.':{en:'The queue is full. Wait for some jobs to finish before adding more videos.',es:'La cola está llena. Espera a que terminen algunos procesamientos antes de añadir más vídeos.'},
 });
 Object.assign(translations, skillsTranslations);
+
+Object.assign(translations, watchTranslations);

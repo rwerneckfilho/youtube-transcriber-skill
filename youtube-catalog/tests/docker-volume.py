@@ -113,6 +113,9 @@ with TestClient(create_app(initial_scan=False, start_jobs=False, download_thumbn
     assert hashlib.sha256(cover.content).hexdigest() == expected['thumbnail_sha256']
     assert client.get('/api/videos/volume_trash/thumbnail').status_code == 200
     tasks = client.get('/api/jobs').json()
+    watches = client.get('/api/watchers').json()
+    assert watches['total'] == 1 and watches['items'][0]['id'] == expected['watcher']
+    assert watches['items'][0]['baseline'] == 1 and watches['items'][0]['language'] == 'es'
     assert tasks['total'] == 2
     assert {j['id']: j['status'] for j in tasks['items']} == expected['jobs']
     index = client.get('/')
@@ -215,11 +218,14 @@ def main() -> int:
         cancelled = api("/jobs", "POST", {"url": "https://www.youtube.com/playlist?list=PLsynthetic_volume_test", "kind": "playlist", "language": "es"})
         cancelled = api(f"/jobs/{cancelled['id']}/cancel", "POST")
         assert queued["status"] == "queued" and cancelled["status"] == "cancelled"
+        subscription = api("/watchers", "POST", {"url": "https://www.youtube.com/playlist?list=PLsynthetic_watch_test", "name": "Synthetic source", "language": "es", "interval_minutes": 60, "initial_mode": "new"})
+        # Seed a successful synthetic baseline without consulting YouTube.
+        docker("exec", name, "python", "-c", "import sqlite3,sys; c=sqlite3.connect('/storage/catalog/catalog.sqlite3'); c.execute(\"UPDATE watch_sources SET initialized=1 WHERE id=?\",(sys.argv[1],)); c.execute(\"INSERT INTO watch_seen VALUES(?,?,'Synthetic baseline','2026-01-01T00:00:00+00:00','baseline',NULL)\",(sys.argv[1],'abcdefghijk')); c.commit()", subscription["id"])
         api(f"/videos/{TRASH}", "DELETE")
         expected = {"categories": chosen["categories"], "added_at": chosen["added_at"],
                     "deleted_at": api("/videos?deleted=true")["items"][0]["deleted_at"],
                     "jobs": {queued["id"]: "queued", cancelled["id"]: "cancelled"},
-                    "thumbnail_sha256": seed["thumbnail_sha256"]}
+                    "thumbnail_sha256": seed["thumbnail_sha256"], "watcher": subscription["id"]}
 
         def assert_saved():
             stats = api("/stats")
@@ -230,6 +236,10 @@ def main() -> int:
             assert trash["items"][0]["deleted_at"] == expected["deleted_at"]
             assert trash["items"][0]["categories"] == expected["categories"]
             jobs = api("/jobs")
+            watches = api("/watchers")
+            assert watches["total"] == 1 and watches["items"][0]["id"] == expected["watcher"]
+            assert watches["items"][0]["baseline"] == 1 and watches["items"][0]["initialized"]
+            assert watches["items"][0]["language"] == "es" and watches["items"][0]["interval_minutes"] == 60
             assert jobs["total"] == 2 and {j["id"]: j["status"] for j in jobs["items"]} == expected["jobs"]
             for job_id, status in expected["jobs"].items():
                 detail = api("/jobs/" + job_id)

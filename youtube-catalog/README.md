@@ -37,6 +37,16 @@ Stopping Docker stops processing. The queue stays in the database and resumes on
 
 The engine uses yt-dlp, ffmpeg, and Whisper.cpp with the multilingual `large-v3-turbo-q5_0` model. The first job downloads approximately 547 MiB of model data and verifies its SHA-256; the file is cached in the volume. No API token is required. The selected language specifies the audio language: it does not translate the transcript or change the original content.
 
+## Follow playlists automatically
+
+Open **Follow playlists** (shown as **Sources** on narrow screens), paste a public or unlisted YouTube playlist link, and choose **Start following**. The default checks every two hours, detects the transcription language automatically, and imports both current videos and future additions. You can instead use the first successful check as a baseline and import only later additions. An empty playlist is a valid baseline; an unsuccessful check is not.
+
+The application stores detected video IDs in its Docker volume. Reordering, removing, or re-adding a previously detected video does not transcribe it again. Existing catalog entries, including Trash, are skipped. Different sources share the same serial transcription queue. Pending additions are saved before being handed to the queue in batches of up to 100; a full queue leaves them pending for a later attempt.
+
+Each source has **Check now**, **Pause/Resume**, frequency and language settings, recent video states, and an option to remove the subscription. Pausing stops new checks and submissions; tasks already in the queue continue. Removing a subscription keeps its transcriptions and queued tasks. Failed transcriptions are retried explicitly from **Add videos**. Failed playlist checks retry automatically with increasing delays, starting at 15 minutes and capped at the configured interval. Private, unavailable, or live items are reconsidered on later checks.
+
+Monitoring runs locally while the Docker application is on, independently of the browser or this chat. Overdue checks run after the application restarts. YouTube lookup and audio downloads require internet; transcription uses the existing local pipeline. Up to 50 sources are supported, with intervals from 15 minutes to 24 hours and a maximum of 10,000 entries per playlist. Set `PLAYLIST_WATCHER_ENABLED=false` in `.env` and recreate the container to disable the background monitor globally while retaining its settings. The feature does not send emails or create a daily bulletin.
+
 ## Language and navigation
 
 The language selector switches the entire interface between PT, EN, and ES and saves the preference in this browser. Titles, transcripts, user-created categories, and analyses retain their original content. The labels below refer to the English interface; Portuguese is the default.

@@ -16,6 +16,7 @@ from .catalog import Catalog, FILES, VIDEO_ID, PurgeConflict, safe_file
 from .thumbnails import FALLBACK, TYPES, ThumbnailManager
 from .jobs import JobError, JobQueue
 from .skills import SkillError, SkillQueue, recommendations
+from .watchers import PlaylistWatchers, WatchError
 
 
 class CategoryName(BaseModel):
@@ -43,7 +44,19 @@ class SkillSubmission(BaseModel):
     language: Literal["pt", "en", "es"] = "pt"
 
 
-def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbnails=None, scan_interval=None, initial_scan=True, start_jobs=None, work_dir=None, model_dir=None, start_skills=None, skill_engine=None) -> FastAPI:
+class WatchSettings(BaseModel):
+    name: str = Field(default="", max_length=160)
+    language: Literal["auto", "pt", "en", "es"] = "auto"
+    interval_minutes: int = Field(default=120, ge=15, le=1440)
+    enabled: bool = True
+
+
+class WatchSubmission(WatchSettings):
+    url: str = Field(min_length=1, max_length=2048)
+    initial_mode: Literal["all", "new"] = "all"
+
+
+def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbnails=None, scan_interval=None, initial_scan=True, start_jobs=None, work_dir=None, model_dir=None, start_skills=None, skill_engine=None, start_watchers=None, playlist_scanner=None) -> FastAPI:
     source = Path(source_dir or os.getenv("TRANSCRIPTS_DIR", "/transcripts"))
     data = Path(data_dir or os.getenv("DATA_DIR", "/data"))
     static = Path(static_dir or os.getenv("STATIC_DIR", "/app/static")).resolve()
@@ -51,6 +64,7 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
     interval = max(1, float(scan_interval if scan_interval is not None else os.getenv("SCAN_INTERVAL_SECONDS", "60")))
     jobs_enabled = start_jobs if start_jobs is not None else os.getenv("JOB_WORKER_ENABLED", "true").lower() not in ("false", "0", "no")
     skills_enabled = start_skills if start_skills is not None else os.getenv("SKILL_WORKER_ENABLED", "true").lower() not in ("false", "0", "no")
+    watchers_enabled = start_watchers if start_watchers is not None else jobs_enabled and os.getenv("PLAYLIST_WATCHER_ENABLED", "true").lower() not in ("false", "0", "no")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -63,12 +77,16 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
         app.state.jobs = jobs
         skills = SkillQueue(catalog, skill_engine)
         app.state.skills = skills
+        watchers = PlaylistWatchers(catalog, jobs, scanner=playlist_scanner)
+        app.state.watchers = watchers
         if initial_scan:
             catalog.request_scan()
         if jobs_enabled:
             jobs.start()
         if skills_enabled:
             skills.start()
+        if watchers_enabled:
+            watchers.start()
 
         async def periodic():
             while True:
@@ -84,6 +102,7 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
                 await timer
             except asyncio.CancelledError:
                 pass
+            await asyncio.to_thread(watchers.close)
             await asyncio.to_thread(skills.close)
             await asyncio.to_thread(jobs.close)
             catalog.stop.set()
@@ -119,6 +138,10 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
     async def skill_error(request, exc):
         return JSONResponse({"detail": str(exc), "error_code": exc.code}, status_code=exc.status)
 
+    @app.exception_handler(WatchError)
+    async def watch_error(request, exc):
+        return JSONResponse({"detail": str(exc), "error_code": exc.code}, status_code=exc.status)
+
     def catalog() -> Catalog:
         return app.state.catalog
 
@@ -134,6 +157,29 @@ def create_app(source_dir=None, data_dir=None, static_dir=None, download_thumbna
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/watchers")
+    def watchers_list():
+        return app.state.watchers.list()
+
+    @app.post("/api/watchers", status_code=201)
+    def watchers_create(body: WatchSubmission):
+        return app.state.watchers.create(**body.model_dump())
+
+    @app.patch("/api/watchers/{identifier}")
+    def watchers_update(identifier: str, body: WatchSettings):
+        app.state.watchers.update(identifier, **body.model_dump(exclude_unset=True))
+        return {"ok": True}
+
+    @app.post("/api/watchers/{identifier}/check", status_code=202)
+    def watchers_check(identifier: str):
+        app.state.watchers.check_now(identifier)
+        return {"ok": True}
+
+    @app.delete("/api/watchers/{identifier}")
+    def watchers_remove(identifier: str):
+        app.state.watchers.remove(identifier)
+        return {"ok": True}
 
     @app.get("/api/skills/status")
     def skill_status():

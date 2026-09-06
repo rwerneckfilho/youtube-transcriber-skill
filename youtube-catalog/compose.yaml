@@ -17,6 +17,7 @@ services:
       SCAN_INTERVAL_SECONDS: "60"
       DOWNLOAD_THUMBNAILS: "${DOWNLOAD_THUMBNAILS:-true}"
       WHISPER_THREADS: "${WHISPER_THREADS:-4}"
+      PLAYLIST_WATCHER_ENABLED: "${PLAYLIST_WATCHER_ENABLED:-true}"
       OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
       SKILL_MODEL: "${SKILL_MODEL:-}"
     extra_hosts:
