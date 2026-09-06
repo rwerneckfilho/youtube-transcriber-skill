@@ -1,71 +1,71 @@
-# rw / ai · Catálogo de transcrições
+# rw / ai · Transcript catalog
 
-Biblioteca local com capas, busca no texto, categorias e análises de método. Inclui uma fila para transcrever vídeos e playlists do YouTube no próprio Docker, sem serviço pago de transcrição. Interface em **português, inglês e espanhol**.
+A local library with video thumbnails, full-text search, categories, and method analyses. Includes a queue for transcribing YouTube videos and playlists within Docker, with no paid transcription service. The interface supports **Portuguese, English, and Spanish**.
 
-## Instalar, abrir e desligar
+## Install, open, and stop
 
-Requer Docker Desktop ou Docker Engine com Compose. A primeira construção baixa dependências e compila o motor local de transcrição.
+Requires Docker Desktop or Docker Engine with Compose. The first build downloads dependencies and compiles the local transcription engine.
 
 ```bash
-# Dentro da pasta youtube-catalog, numa instalação nova:
+# From the youtube-catalog directory, for a new installation:
 cp .env.example .env
 docker compose up -d --build
 ```
 
-Abra [localhost:8765](http://localhost:8765). No macOS, também é possível abrir **Iniciar.command** e **Parar.command**. Preserve um `.env` já configurado. O projeto **youtube-catalog** aparece no Docker Desktop e pode ser ligado ou desligado pelos botões habituais; não inicia automaticamente.
+Open [localhost:8765](http://localhost:8765). On macOS, you can also open [Start.command](Start.command) and [Stop.command](Stop.command). Keep any existing `.env` configuration. The **youtube-catalog** project appears in Docker Desktop and can be started or stopped with its usual controls; it does not start automatically.
 
 ```bash
-docker compose stop       # desligar e preservar a fila e a biblioteca
-docker compose start      # ligar novamente
-docker compose ps         # consultar o estado
+docker compose stop       # stop while preserving the queue and library
+docker compose start      # start again
+docker compose ps         # check status
 ```
 
-A porta é publicada apenas em `127.0.0.1`, sem login. Se quiser trocar a porta, altere `CATALOG_PORT` no `.env` e execute `docker compose up -d`.
+The port is bound only to `127.0.0.1`, with no login required. To change the port, update `CATALOG_PORT` in `.env` and run `docker compose up -d`.
 
-## Adicionar vídeos ou uma playlist
+## Add videos or a playlist
 
-1. Abra **Adicionar vídeos** e cole uma URL HTTPS de vídeo ou playlist do YouTube.
-2. Use a detecção automática, ou escolha explicitamente **Vídeo** ou **Playlist**. Um link de vídeo com `list=` usa a playlist no modo automático; escolher Vídeo processa somente o vídeo.
-3. Escolha o idioma falado: **Automático**, **Português**, **Inglês** ou **Espanhol**.
-4. Envie para a fila. Uma playlist é percorrida inteira e seus vídeos são transcritos um por vez. Os resultados entram no catálogo automaticamente.
+1. Open **Add videos** and paste an HTTPS URL for a YouTube video or playlist.
+2. Use **Detect automatically**, or explicitly choose **Video** or **Entire playlist**. A video link containing `list=` selects the playlist in automatic mode; choosing Video processes only that video.
+3. Select the spoken language: **Detect automatically**, **Portuguese**, **English**, or **Spanish**.
+4. Add it to the queue. The app enumerates the entire playlist and transcribes its videos one at a time. Results appear in the catalog automatically.
 
-Acompanhe a etapa atual, as contagens e os resultados de cada vídeo. Itens privados, removidos ou com erro são sinalizados; os demais continuam. Vídeos já presentes, inclusive na Lixeira, não são sobrescritos. É possível cancelar um trabalho ou repetir os itens que falharam/foram cancelados. Lives ainda em andamento não são processadas.
+Follow the current stage, counts, and results for each video. Private, removed, or failed items are flagged while processing continues for the others. Existing videos, including those in Trash, are not overwritten. You can cancel a job or retry its failed or cancelled items. Ongoing live streams are not processed.
 
-Ao desligar o Docker, o processamento para. A fila permanece no banco e retoma ao ligar; uma etapa incompleta pode ser reiniciada, preservando os vídeos já concluídos. A biblioteca continua disponível durante o processamento. Transcrições longas podem levar tempo, pois usam a CPU local. `WHISPER_THREADS` no `.env` permite ajustar o número de threads.
+Stopping Docker stops processing. The queue stays in the database and resumes on startup; an incomplete stage may restart, preserving completed videos. The library remains available during processing. Long transcriptions can take time because they use the local CPU. Set `WHISPER_THREADS` in `.env` to adjust the number of threads.
 
-O motor usa yt-dlp, ffmpeg e Whisper.cpp, com o modelo multilíngue `large-v3-turbo-q5_0`. O primeiro trabalho baixa aproximadamente 547 MiB de modelo e confere seu SHA-256; o arquivo fica em cache no volume. Não é necessário token de API. O idioma escolhido informa o idioma do áudio: não traduz a transcrição nem altera o conteúdo original.
+The engine uses yt-dlp, ffmpeg, and Whisper.cpp with the multilingual `large-v3-turbo-q5_0` model. The first job downloads approximately 547 MiB of model data and verifies its SHA-256; the file is cached in the volume. No API token is required. The selected language specifies the audio language: it does not translate the transcript or change the original content.
 
-## Idioma e navegação
+## Language and navigation
 
-O seletor de idioma alterna toda a interface entre PT, EN e ES e guarda a preferência neste navegador. Títulos, transcrições, categorias criadas pelo usuário e análises mantêm seu conteúdo original.
+The language selector switches the entire interface between PT, EN, and ES and saves the preference in this browser. Titles, transcripts, user-created categories, and analyses retain their original content. The labels below refer to the English interface; Portuguese is the default.
 
-- **Início:** recentes e prateleiras por canal ou categoria.
-- **Todos os vídeos:** busca combinada com canal, categoria, idioma e ordenação. Resultados levam ao trecho correspondente.
-- **Transcrição:** texto com timestamps, busca interna, falantes quando disponíveis e carregamento progressivo.
-- **Método:** análise existente em `METODO.md`, quando disponível. Novas transcrições não geram análises automaticamente.
-- **Arquivos:** TXT, SRT e JSON, incluindo versões com falantes quando já existirem.
-- **Categorias:** criar, renomear e atribuir vários temas; sugestões locais só são aplicadas quando selecionadas.
-- **Lixeira:** Excluir do catálogo preserva os arquivos; Restaurar recupera o vídeo com suas categorias. Excluir definitivamente exige digitar EXCLUIR e apaga os arquivos daquele vídeo no armazenamento do Docker. Após uma falha parcial, a Lixeira permite confirmar novamente para concluir; a remoção física não é retomada automaticamente.
+- **Home:** recent additions and shelves grouped by channel or category.
+- **All videos:** search combined with channel, category, language, and sorting options. Results lead to the matching passage.
+- **Transcript:** text with timestamps, internal search, speaker labels when available, and progressive loading.
+- **Method:** an existing analysis from `METODO.md`, when available. New transcriptions do not generate analyses automatically.
+- **Your files:** TXT, SRT, and JSON, including existing versions with speaker labels.
+- **Categories:** create, rename, and assign multiple topics; local suggestions are applied only when selected.
+- **Trash:** Remove from catalog preserves the files; Restore video brings the video back with its categories. Delete permanently requires typing `DELETE` in English (`EXCLUIR` in Portuguese or `ELIMINAR` in Spanish) and erases that video's files from Docker storage. After a partial failure, Trash lets you confirm again to finish; physical deletion never resumes automatically.
 
-## Banco de dados e conteúdos dentro do Docker
+## Database and content inside Docker
 
-O volume nomeado **youtube-catalog-storage** guarda toda a biblioteca. Ele é gerenciado pelo Docker e permanece no computador mesmo quando o container é parado, atualizado ou recriado:
+The named volume **youtube-catalog-storage** holds the entire library. Docker manages it, and it remains on the computer when the container is stopped, updated, or recreated:
 
-| Dentro do container | Conteúdo |
+| Inside the container | Content |
 | --- | --- |
-| `/storage/catalog/catalog.sqlite3` | Banco SQLite: metadados, transcrições segmentadas, índice FTS5, métodos, categorias, Lixeira e fila |
-| `/storage/transcripts/` | Arquivos de cada vídeo: `video.json`, TXT, SRT, JSON e demais originais importados |
-| `/storage/catalog/thumbnails/` | Capas locais |
-| `/storage/models/` | Modelo de transcrição verificado |
-| `/storage/work/` | Trabalho incompleto e arquivos temporários da fila |
+| `/storage/catalog/catalog.sqlite3` | SQLite database: metadata, transcript segments, FTS5 index, methods, categories, Trash, and queue |
+| `/storage/transcripts/` | Files for each video: `video.json`, TXT, SRT, JSON, and other imported originals |
+| `/storage/catalog/thumbnails/` | Local thumbnails |
+| `/storage/models/` | Verified transcription model |
+| `/storage/work/` | Unfinished work and temporary queue files |
 
-Não há dependência de uma pasta de transcrições no computador para usar a instalação nova. A variável `CATALOG_VOLUME` seleciona outro volume; trocar seu nome abre uma biblioteca diferente. **Não remova o volume nem execute `docker compose down -v` para simplesmente desligar**, pois isso apaga os dados persistentes.
+A new installation does not depend on a transcript folder on the host computer. The `CATALOG_VOLUME` variable selects a different volume; changing its name opens a different library. **Do not remove the volume or run `docker compose down -v` simply to stop the app**, as this deletes persistent data.
 
-## Migrar a coleção da versão anterior
+## Migrate a collection from the previous version
 
-Execute antes de iniciar uma biblioteca nova. A migração copia as fontes, as capas e o banco anterior, preservando categorias, métodos e Lixeira. As pastas antigas ficam intactas como cópia de segurança; passam a ser independentes da biblioteca no Docker. Alterações posteriores nessas pastas não são importadas automaticamente.
+Run the migration before starting a new library. It copies the source files, thumbnails, and previous database, preserving categories, methods, and Trash. The old folders remain intact as a backup and become independent of the library in Docker. Later changes to those folders are not imported automatically.
 
-Os caminhos padrão são `../yt-transcripts` e `./data`. Para outras pastas, defina `LEGACY_TRANSCRIPTS_DIR` e `LEGACY_DATA_DIR` no `.env`. Ambas precisam existir.
+The default paths are `../yt-transcripts` and `./data`. For other folders, set `LEGACY_TRANSCRIPTS_DIR` and `LEGACY_DATA_DIR` in `.env`. Both folders must exist.
 
 ```bash
 docker compose stop
@@ -74,33 +74,33 @@ docker compose -f compose.yaml -f compose.migrate.yaml run --rm --no-deps --user
 docker compose up -d
 ```
 
-Se houver uma exclusão definitiva incompleta, conclua-a na Lixeira da versão anterior antes de migrar. O processo confere as cópias e a integridade do banco. Não sobrescreve um volume que já contenha uma biblioteca. Depois de concluído, repetir a migração não reimporta vídeos apagados. Uma cópia interrompida exige repetir explicitamente o comando; o aplicativo não inicia enquanto houver uma migração incompleta. Para importar uma coleção sem banco anterior, use uma pasta vazia como `LEGACY_DATA_DIR`.
+If a permanent deletion is incomplete, finish it in the previous version's Trash before migrating. The process verifies the copies and database integrity. It does not overwrite a volume that already contains a library. Once complete, repeating the migration does not reimport deleted videos. An interrupted copy requires explicitly running the command again; the app will not start while a migration is incomplete. To import a collection without a previous database, use an empty folder as `LEGACY_DATA_DIR`.
 
 ## Backup
 
-Desligue antes de copiar a biblioteca. Um backup inclui banco, conteúdos, fila e modelo:
+Stop the app before copying the library. A backup includes the database, content, queue, and model:
 
 ```bash
 docker compose stop
 mkdir -p backups
-docker compose run --rm --no-deps --user 0:0 --cap-add DAC_OVERRIDE --entrypoint python -v "$PWD/backups:/backup" catalog /app/scripts/storage.py backup /backup/biblioteca.tar.gz
+docker compose run --rm --no-deps --user 0:0 --cap-add DAC_OVERRIDE --entrypoint python -v "$PWD/backups:/backup" catalog /app/scripts/storage.py backup /backup/library.tar.gz
 ```
 
-Use um nome de arquivo novo a cada backup. O comando não sobrescreve backups anteriores. A pasta `backups/` fica fora do volume. Para restaurar, com o aplicativo desligado, extraia o arquivo em um **volume novo** e configure `CATALOG_VOLUME` para esse volume. Mantenha a propriedade dos arquivos em `1000:1000`, como na biblioteca original. Só remova a biblioteca anterior depois de conferir a restauração.
+Use a new filename for each backup. The command does not overwrite earlier backups. The `backups/` folder is outside the volume. To restore, with the app stopped, extract the archive into a **new volume** and set `CATALOG_VOLUME` to that volume. Keep file ownership at `1000:1000`, as in the original library. Remove the previous library only after verifying the restoration.
 
-## Internet e privacidade
+## Internet and privacy
 
-A instalação baixa dependências. Um trabalho solicitado acessa o YouTube para metadados e áudio; o primeiro uso também baixa o modelo do Hugging Face. Capas podem ser baixadas em segundo plano. Áudio e texto são processados localmente; não há envio a uma API de transcrição ou serviço de telemetria.
+Installation downloads dependencies. A requested job accesses YouTube for metadata and audio; first use also downloads the model from Hugging Face. Thumbnails may download in the background. Audio and text are processed locally, with no uploads to a transcription API or telemetry service.
 
-Sem internet, é possível navegar, buscar, ler, editar categorias e baixar os arquivos já armazenados. Novos trabalhos podem falhar e ser repetidos quando a conexão voltar. As fontes da interface são locais. Para impedir novos downloads de capas, use `DOWNLOAD_THUMBNAILS=false` no `.env` e recrie o container.
+Without internet, you can browse, search, read, edit categories, and download files already stored in the library. New jobs may fail and can be retried when the connection returns. Interface fonts are local. To prevent new thumbnail downloads, set `DOWNLOAD_THUMBNAILS=false` in `.env` and recreate the container.
 
-## Atualização e verificação
+## Update and verify
 
 ```bash
 docker compose up -d --build
 ```
 
-O volume é reutilizado. Banco, modelos e conteúdos não fazem parte do repositório. Para investigar inicialização, use `docker compose logs --tail=80`.
+The volume is reused. The database, models, and content are not part of the repository. To investigate startup issues, use `docker compose logs --tail=80`.
 
 ```bash
 python3 -m venv .venv
@@ -108,6 +108,6 @@ python3 -m venv .venv
 .venv/bin/python -m pytest backend/tests tests/test_storage.py -q
 ```
 
-O contrato da API está em [CONTRACT.md](CONTRACT.md). Os roteiros de teste, incluindo idioma, playlists, exclusão e persistência, estão em [tests/README.md](tests/README.md). As verificações destrutivas usam dados descartáveis.
+The API contract is in [CONTRACT.md](CONTRACT.md). Test procedures, including language, playlists, deletion, and persistence checks, are in [tests/README.md](tests/README.md). Destructive checks use disposable data.
 
-Referências: [Whisper.cpp](https://github.com/ggml-org/whisper.cpp), [yt-dlp](https://github.com/yt-dlp/yt-dlp), [volumes do Docker](https://docs.docker.com/engine/storage/volumes/).
+References: [Whisper.cpp](https://github.com/ggml-org/whisper.cpp), [yt-dlp](https://github.com/yt-dlp/yt-dlp), [Docker volumes](https://docs.docker.com/engine/storage/volumes/).

@@ -105,7 +105,7 @@ class ThumbnailManager:
                 temporary.write_bytes(data)
                 os.replace(temporary, self.directory / (video_id + TYPES[content_type]))
         except Exception as exc:
-            LOG.info("Capa local substituta para %s (%s)", video_id, type(exc).__name__)
+            LOG.info("Using a local placeholder thumbnail for %s (%s)", video_id, type(exc).__name__)
             with self.lock:
                 self.retry_after[video_id] = time.monotonic() + 300
         finally:

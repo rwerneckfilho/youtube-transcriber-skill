@@ -475,7 +475,7 @@ class JobQueue:
                 if self.run_once():
                     continue
             except Exception:
-                LOG.exception("Falha inesperada no worker de transcrição")
+                LOG.exception("Unexpected transcription worker failure")
             self.wake.wait(1)
             self.wake.clear()
 
@@ -638,7 +638,7 @@ class JobQueue:
                     conn.execute("UPDATE jobs SET status='failed',stage='failed',error=?,error_code=?,updated_at=? WHERE id=?", (message, code, now(), job_id))
                     conn.execute("UPDATE job_items SET status='failed',stage='failed',error=?,error_code=?,updated_at=? WHERE job_id=? AND status='running'", (message, code, now(), job_id))
                 self.log(job_id, "failed", message)
-            LOG.exception("Falha na tarefa de transcrição")
+            LOG.exception("Transcription job failed")
             return True
         finally:
             self.active_job = None

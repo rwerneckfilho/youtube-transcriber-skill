@@ -1,1 +1,1 @@
-"""Catálogo pessoal de transcrições, inteiramente local."""
+"""A personal transcript catalog that runs entirely locally."""

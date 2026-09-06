@@ -85,7 +85,7 @@ def inventory(source: Path) -> dict[str, dict]:
             original = metadata.parent / "transcript.json"
             segments = segments_from(original)
             if not isinstance(meta, dict) or not meta.get("id") or not segments:
-                raise ValueError("metadados ou segmentos vazios")
+                raise ValueError("empty metadata or segments")
             speaker_path = metadata.parent / "transcript-speakers.json"
             if speaker_path.is_file():
                 try:
@@ -101,7 +101,7 @@ def inventory(source: Path) -> dict[str, dict]:
                 "method": method, "cluster": yaml_scalar(method, "cluster") if method else None,
             }
         except (OSError, ValueError, KeyError, TypeError) as error:
-            print(f"AVISO fonte ignorada: {metadata}: {error}")
+            print(f"WARNING skipped source: {metadata}: {error}")
     return records
 
 
@@ -125,20 +125,20 @@ class Acceptance:
             found.extend(result["items"])
             if len(found) >= result["total"]:
                 break
-            assert result["items"], "Paginação da lixeira terminou antes do total"
+            assert result["items"], "Trash pagination ended before the reported total"
             page += 1
         deleted_ids = [video["id"] for video in found]
-        assert len(deleted_ids) == len(set(deleted_ids)), "Vídeos duplicados na lixeira"
-        assert set(deleted_ids) <= set(self.all_records), "Vídeo da lixeira sem fonte correspondente nesta coleção"
-        assert all(video.get("deleted_at") for video in found), "Vídeo na lixeira sem data de exclusão"
+        assert len(deleted_ids) == len(set(deleted_ids)), "Duplicate videos in Trash"
+        assert set(deleted_ids) <= set(self.all_records), "Trashed video has no matching source in this collection"
+        assert all(video.get("deleted_at") for video in found), "Trashed video has no deletion timestamp"
         self.records = {key: value for key, value in self.all_records.items() if key not in set(deleted_ids)}
         assert stats["videos"] + stats["deleted_videos"] == len(self.all_records)
-        print(f"       {stats['videos']} vídeos ativos; {stats['deleted_videos']} na lixeira; {len(self.all_records)} fontes preservadas")
+        print(f"       {stats['videos']} active videos; {stats['deleted_videos']} in Trash; {len(self.all_records)} sources preserved")
 
     def get(self, path: str, *, params: dict | None = None, expected: int = 200):
         url = urljoin(self.base_url, path)
         if urlsplit(url).netloc != urlsplit(self.base_url).netloc:
-            raise AssertionError(f"URL deveria permanecer local: {path}")
+            raise AssertionError(f"URL should remain local: {path}")
         if params:
             url += "?" + urlencode(params)
         try:
@@ -149,12 +149,12 @@ class Acceptance:
             body = response.read()
             status = response.status
             headers = response.headers
-        assert status == expected, f"GET {path}: HTTP {status}, esperado {expected}; {body[:180]!r}"
+        assert status == expected, f"GET {path}: HTTP {status}, expected {expected}; {body[:180]!r}"
         return body, headers
 
     def json(self, path: str, **kwargs):
         body, headers = self.get(path, **kwargs)
-        assert "application/json" in headers.get("Content-Type", ""), f"JSON esperado: {path}"
+        assert "application/json" in headers.get("Content-Type", ""), f"Expected JSON: {path}"
         return json.loads(body)
 
     def run(self, name: str, check):
@@ -162,39 +162,39 @@ class Acceptance:
             check()
         except Exception as error:
             self.failed += 1
-            print(f"FALHOU {name}: {error}", flush=True)
+            print(f"FAILED {name}: {error}", flush=True)
         else:
             self.passed += 1
             print(f"OK     {name}", flush=True)
 
     def wait_ready(self, seconds: int):
         deadline = time.monotonic() + seconds
-        last = "servidor ainda indisponível"
+        last = "server still unavailable"
         while time.monotonic() <= deadline:
             try:
                 health = self.json("/api/health")
                 stats = self.json("/api/stats")
                 if health.get("status") == "ok" and not stats.get("scanning") and stats.get("videos"):
                     return
-                last = f"importação em andamento: {stats.get('videos', 0)} vídeos"
+                last = f"import in progress: {stats.get('videos', 0)} videos"
             except (OSError, URLError, AssertionError, ValueError) as error:
                 last = str(error)
             time.sleep(1)
-        raise RuntimeError(f"Aplicativo não ficou pronto em {seconds}s: {last}")
+        raise RuntimeError(f"Application was not ready within {seconds}s: {last}")
 
     def check_inventory(self):
-        assert self.records, "Nenhuma fonte válida foi encontrada"
+        assert self.records, "No valid sources found"
         stats = self.json("/api/stats")
         channels = {record["meta"].get("channel_id") or record["meta"].get("channel")
                     for record in self.records.values()}
         methods = sum(bool(record["method"]) for record in self.records.values())
         clusters = {record["cluster"] for record in self.records.values() if record["cluster"]}
-        assert stats["videos"] == len(self.records), f"{stats['videos']} vídeos; fontes: {len(self.records)}"
-        assert stats["channels"] == len(channels), f"{stats['channels']} canais; fontes: {len(channels)}"
-        assert stats["methods"] == methods, f"{stats['methods']} métodos; fontes: {methods}"
-        assert stats["categories"] >= len(clusters), f"Categorias importadas ausentes: {clusters}"
-        assert stats.get("last_scan"), "Data da última importação ausente"
-        print(f"       Fontes: {len(self.records)} vídeos, {len(channels)} canais, {methods} métodos, {len(clusters)} categorias")
+        assert stats["videos"] == len(self.records), f"{stats['videos']} videos; sources: {len(self.records)}"
+        assert stats["channels"] == len(channels), f"{stats['channels']} channels; sources: {len(channels)}"
+        assert stats["methods"] == methods, f"{stats['methods']} methods; sources: {methods}"
+        assert stats["categories"] >= len(clusters), f"Missing imported categories: {clusters}"
+        assert stats.get("last_scan"), "Missing last-import timestamp"
+        print(f"       Sources: {len(self.records)} videos, {len(channels)} channels, {methods} methods, {len(clusters)} categories")
 
     def check_pagination(self):
         found = []
@@ -208,21 +208,21 @@ class Acceptance:
             found.extend(result["items"])
             if len(found) >= result["total"]:
                 break
-            assert result["items"], "Paginação terminou antes do total anunciado"
+            assert result["items"], "Pagination ended before the reported total"
             page += 1
         ids = [video["id"] for video in found]
-        assert len(ids) == len(set(ids)), "Vídeos repetidos entre páginas"
-        assert set(ids) == set(self.records), "Os IDs importados diferem das fontes"
+        assert len(ids) == len(set(ids)), "Duplicate videos across pages"
+        assert set(ids) == set(self.records), "Imported IDs differ from the sources"
         self.cards = {video["id"]: video for video in found}
         for video in found:
             assert video["title"] == self.records[video["id"]]["meta"]["title"]
             assert video["available"] is True
-            assert video["thumbnail_url"].startswith("/"), "Capa deve ter endereço local"
+            assert video["thumbnail_url"].startswith("/"), "Thumbnail must have a local URL"
         empty = self.json("/api/videos", params={"page": 10000})
         assert empty["items"] == [] and empty["total"] == len(self.records)
 
     def check_filters(self):
-        assert self.cards, "Verificação da paginação não forneceu vídeos"
+        assert self.cards, "Pagination check returned no videos"
         channels = self.json("/api/channels")
         categories = self.json("/api/categories")
         stats = self.json("/api/stats")
@@ -246,7 +246,7 @@ class Acceptance:
         }
         target = next((video for video in self.cards.values() if video["categories"]), None)
         if target is None:
-            print("       AVISO: nenhum vídeo ativo classificado para testar filtro combinado")
+            print("       WARNING: no classified active video available to test combined filters")
             return
         params = {"channel": target["channel_id"], "category": target["categories"][0]["id"],
                   "language": target["language"], "page_size": 100}
@@ -263,23 +263,23 @@ class Acceptance:
         if candidates:
             video_id, word = max(candidates, key=lambda candidate: len(candidate[1]))
             result = self.json("/api/videos", params={"q": normalized(word).upper(), "page_size": 100})
-            assert video_id in {video["id"] for video in result["items"]}, f"Título não encontrado: {word}"
+            assert video_id in {video["id"] for video in result["items"]}, f"Title not found: {word}"
             accented = self.json("/api/videos", params={"q": word, "page_size": 100})
             assert {video["id"] for video in accented["items"]} == {video["id"] for video in result["items"]}
         else:
-            print("       AVISO: nenhum título ativo com acento disponível para este cenário")
+            print("       WARNING: no active accented title available for this scenario")
         longest_id = max(self.records, key=lambda key: self.records[key]["meta"].get("duration", 0))
         record = self.records[longest_id]
         words = [(len(word), word) for segment in record["segments"]
                  for word in re.findall(r"[^\W\d_]+", segment.get("text", ""))
                  if len(word) >= 9 and normalized(word) not in normalized(record["meta"]["title"])]
-        assert words, "Termo de busca de transcrição não encontrado na fonte"
+        assert words, "No transcript search term found in the source"
         _, transcript_word = max(words)
         result = self.json("/api/videos", params={"q": transcript_word, "page_size": 100})
         match_video = next((video for video in result["items"] if video["id"] == longest_id), None)
-        assert match_video, f"Transcrição não encontrada: {transcript_word}"
+        assert match_video, f"Transcript not found: {transcript_word}"
         match = match_video.get("match")
-        assert match and match.get("segment_index") is not None, "Resultado sem posição do trecho"
+        assert match and match.get("segment_index") is not None, "Result has no segment position"
         segment = self.json(f"/api/videos/{longest_id}/segments", params={"offset": match["segment_index"], "limit": 1})["items"][0]
         assert normalized(transcript_word) in normalized(segment["text"])
         assert match["start_ms"] == segment["start_ms"]
@@ -301,15 +301,15 @@ class Acceptance:
             for index, segment in enumerate(result["items"], start=offset):
                 original = source[index]
                 assert segment["index"] == index
-                assert segment["start_ms"] == offset_ms(original, "start"), f"Milissegundos incorretos no segmento {index}"
+                assert segment["start_ms"] == offset_ms(original, "start"), f"Incorrect millisecond offset in segment {index}"
                 assert segment["end_ms"] == offset_ms(original, "end")
                 assert segment["text"].strip() == original["text"].strip()
-                assert segment["start_ms"] >= previous_end, "Segmentos fora de ordem"
+                assert segment["start_ms"] >= previous_end, "Segments are out of order"
                 assert segment["end_ms"] >= segment["start_ms"]
                 previous_end = segment["start_ms"]
                 seen += 1
         assert seen == len(source)
-        print(f"       Vídeo mais longo: {video_id}, {self.records[video_id]['meta']['duration']}s, {seen} segmentos")
+        print(f"       Longest video: {video_id}, {self.records[video_id]['meta']['duration']}s, {seen} segments")
         assert self.json(f"/api/videos/{video_id}/segments", params={"offset": len(source) + 50})["items"] == []
 
     def check_details_and_speakers(self):
@@ -317,21 +317,21 @@ class Acceptance:
         if method_id:
             detail = self.json(f"/api/videos/{method_id}")
             assert detail["has_method"] is True and detail["method"].strip()
-            assert not detail["method"].lstrip().startswith("---"), "YAML exposto como conteúdo do método"
+            assert not detail["method"].lstrip().startswith("---"), "YAML exposed as method content"
             assert len(detail["suggestions"]) <= 3
             assigned = {category["id"] for category in detail["categories"]}
             assert not assigned.intersection(category["id"] for category in detail["suggestions"])
         else:
-            print("       AVISO: nenhum vídeo ativo com método disponível para este cenário")
+            print("       WARNING: no active video with a method analysis available for this scenario")
         missing = next((key for key, value in self.records.items() if not value["method"]), None)
         if missing:
             without = self.json(f"/api/videos/{missing}")
             assert without["has_method"] is False and without["method"] is None
         else:
-            print("       AVISO: nenhum vídeo sem método disponível nesta coleção")
+            print("       WARNING: no video without a method analysis available in this collection")
         speaker_ids = [key for key, value in self.records.items() if any(segment.get("speaker") for segment in value["segments"])]
         if not speaker_ids:
-            print("       AVISO: nenhuma transcrição ativa com falantes disponível para testar")
+            print("       WARNING: no active transcript with speaker labels available to test")
         for video_id in speaker_ids:
             detail = self.json(f"/api/videos/{video_id}")
             assert detail["has_speakers"] is True
@@ -351,7 +351,7 @@ class Acceptance:
                 path = self.records[video_id]["directory"] / entry["filename"]
                 assert path.parent == self.records[video_id]["directory"] and path.is_file()
                 body, _ = self.get(entry["url"])
-                assert hashlib.sha256(body).hexdigest() == digest(path), f"Download diferente da fonte: {entry['filename']}"
+                assert hashlib.sha256(body).hexdigest() == digest(path), f"Download differs from the source: {entry['filename']}"
 
     def check_http_boundaries(self):
         video_id = next(iter(self.records))
@@ -360,19 +360,19 @@ class Acceptance:
                      f"/api/videos/{video_id}/files/%2e%2e%2fvideo.json",
                      f"/api/videos/{video_id}/files/%252e%252e%252fvideo.json"]:
             error = self.json(path, expected=404)
-            assert isinstance(error.get("detail"), str), f"Erro sem mensagem: {path}"
+            assert isinstance(error.get("detail"), str), f"Error response has no message: {path}"
         thumbnail, headers = self.get(f"/api/videos/{video_id}/thumbnail")
         assert headers.get("Content-Type", "").startswith("image/") and thumbnail
         root, headers = self.get("/")
         assert "text/html" in headers.get("Content-Type", "")
         html = root.decode("utf-8")
-        assert "<html" in html.lower() and "<script" in html.lower(), "Interface compilada não servida"
+        assert "<html" in html.lower() and "<script" in html.lower(), "Compiled interface was not served"
         deep, headers = self.get(f"/videos/{video_id}")
-        assert "text/html" in headers.get("Content-Type", "") and deep == root, "Rota da SPA não funciona"
+        assert "text/html" in headers.get("Content-Type", "") and deep == root, "SPA route does not work"
         assets = re.findall(r'(?:src|href)=["\']([^"\']+\.(?:js|css)(?:\?[^"\']*)?)["\']', html)
-        assert assets, "Nenhum arquivo de interface local encontrado"
+        assert assets, "No local interface assets found"
         for asset in assets:
-            assert not urlsplit(asset).scheme and not asset.startswith("//"), f"Dependência externa da interface: {asset}"
+            assert not urlsplit(asset).scheme and not asset.startswith("//"), f"External interface dependency: {asset}"
             body, _ = self.get(asset)
             assert body
 
@@ -381,40 +381,40 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:8765")
     parser.add_argument("--source", type=Path, default=Path("../yt-transcripts"))
-    parser.add_argument("--wait", type=int, default=90, help="Segundos para aguardar a primeira importação")
+    parser.add_argument("--wait", type=int, default=90, help="Seconds to wait for the initial import")
     args = parser.parse_args()
     source = args.source.resolve()
     if not source.is_dir():
-        parser.error(f"Pasta de fontes não encontrada: {source}")
+        parser.error(f"Source directory not found: {source}")
     if urlsplit(args.url).hostname not in {"localhost", "127.0.0.1", "::1"}:
-        parser.error("Use o endereço local do catálogo (localhost ou loopback).")
+        parser.error("Use the local catalog address (localhost or loopback).")
     before = manifest(source)
     suite = Acceptance(args.url, source)
-    print(f"Verificação somente leitura: {args.url}; {len(before)} arquivos originais protegidos por SHA-256", flush=True)
+    print(f"Read-only verification: {args.url}; {len(before)} original files protected by SHA-256", flush=True)
     try:
         suite.wait_ready(args.wait)
     except Exception as error:
-        print(f"FALHOU prontidão: {error}")
+        print(f"FAILED readiness: {error}")
         return 1
     for name, check in [
-        ("lixeira explícita e fontes dos vídeos excluídos", suite.check_trash_inventory),
-        ("inventário real e estatísticas", suite.check_inventory),
-        ("paginação, títulos e disponibilidade", suite.check_pagination),
-        ("canais, categorias e filtros combinados", suite.check_filters),
-        ("busca sem acentos e acesso ao trecho", suite.check_search),
-        ("leitura progressiva e timestamps do vídeo mais longo", suite.check_long_transcript),
-        ("métodos, falantes e downloads idênticos às fontes", suite.check_details_and_speakers),
-        ("erros de API, bloqueio de caminhos e interface local", suite.check_http_boundaries),
+        ("explicit Trash listing and sources of deleted videos", suite.check_trash_inventory),
+        ("actual source inventory and statistics", suite.check_inventory),
+        ("pagination, titles and availability", suite.check_pagination),
+        ("channels, categories and combined filters", suite.check_filters),
+        ("accent-insensitive search and matching segment access", suite.check_search),
+        ("progressive reading and timestamps of the longest video", suite.check_long_transcript),
+        ("methods, speakers and downloads identical to the sources", suite.check_details_and_speakers),
+        ("API errors, path restrictions and local interface", suite.check_http_boundaries),
     ]:
         suite.run(name, check)
 
     def check_source_untouched():
         after = manifest(source)
         changed = sorted(key for key in before.keys() | after.keys() if before.get(key) != after.get(key))
-        assert not changed, f"Arquivos originais alterados durante a verificação: {changed}"
+        assert not changed, f"Original files changed during verification: {changed}"
 
-    suite.run("fontes originais inalteradas (SHA-256)", check_source_untouched)
-    print(f"\nResultado: {suite.passed} verificações aprovadas; {suite.failed} falhas.")
+    suite.run("original sources unchanged (SHA-256)", check_source_untouched)
+    print(f"\nResult: {suite.passed} checks passed; {suite.failed} failures.")
     return 1 if suite.failed else 0
 
 

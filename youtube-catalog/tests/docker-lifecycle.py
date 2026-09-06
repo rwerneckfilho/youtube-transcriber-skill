@@ -39,7 +39,7 @@ def ready():
         except (URLError, OSError):
             pass
         time.sleep(.3)
-    raise AssertionError("Container de teste não terminou a importação")
+    raise AssertionError("Test container did not finish importing")
 
 
 def main():
@@ -76,12 +76,12 @@ def main():
             api("/scan", "POST")
             ready()
             assert_saved()
-            print("OK categorias criadas, renomeadas e preservadas após atualização", flush=True)
+            print("OK categories created, renamed and preserved after a refresh", flush=True)
             docker("stop", NAME)
             docker("start", NAME)
             ready()
             assert_saved()
-            print("OK categorias preservadas após desligar e ligar", flush=True)
+            print("OK categories preserved after stopping and starting", flush=True)
             api(f"/videos/{selected}", "DELETE")
             api("/scan", "POST")
             ready()
@@ -95,14 +95,14 @@ def main():
             docker("start", NAME)
             ready()
             assert_deleted()
-            print("OK exclusão preservada após atualizar, desligar e ligar", flush=True)
+            print("OK deletion preserved after a refresh, stop and start", flush=True)
             docker("rm", "-f", NAME)
             docker(*run_args)
             ready()
             assert_deleted()
             api(f"/videos/{selected}/restore", "POST")
             assert_saved()
-            print("OK exclusão preservada na recriação e restauração com categorias intactas", flush=True)
+            print("OK deletion preserved after recreation; restoration keeps categories intact", flush=True)
             docker("rm", "-f", NAME)
 
             offline = '''
@@ -122,7 +122,7 @@ with TestClient(create_app(initial_scan=False, download_thumbnails=False)) as cl
     for cover in covers[:1]:
         r=client.get('/api/videos/'+cover.stem+'/thumbnail')
         assert r.content == cover.read_bytes()
-    print('OK interface, busca, leitura e capas com container sem rede; capas em cache:',len(covers))
+    print('OK interface, search, reading and thumbnails with no container network; cached thumbnails:',len(covers))
 '''
             print(docker("run", "--rm", *common, "--network", "none", "youtube-catalog:local", "python", "-c", offline), flush=True)
         finally:

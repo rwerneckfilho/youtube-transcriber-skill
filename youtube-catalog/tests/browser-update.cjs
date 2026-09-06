@@ -54,7 +54,7 @@ async function poll(check, message, timeout = 15000) {
 }
 async function check(name, work) {
   try { await work(); console.log(`OK     ${name}`); }
-  catch (error) { failed.push({ name, error: error.message }); console.error(`FALHOU ${name}: ${error.message}`); }
+  catch (error) { failed.push({ name, error: error.message }); console.error(`FAILED ${name}: ${error.message}`); }
 }
 async function contextFor(browser, base, allowWrites) {
   const context = await browser.newContext({ viewport: { width: 1600, height: 900 }, locale: 'pt-BR', reducedMotion: 'reduce' });
@@ -181,7 +181,7 @@ async function deletionChecks(browser) {
   const originals = sourceManifest();
   let deletedByTest = false;
   try {
-    await check('isolado: cancelar e Escape preservam vídeo, contadores e foco', async () => {
+    await check('isolated: cancel and Escape preserve the video, counts and focus', async () => {
       await reader(page, testUrl, video);
       const trigger = page.locator('.delete-trigger');
       const dialog = page.getByRole('dialog', { name: 'Excluir do catálogo?', exact: true });
@@ -203,7 +203,7 @@ async function deletionChecks(browser) {
         if (await dialog.isVisible()) { await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' }); }
       }
     });
-    await check('isolado: excluir move para Lixeira e sobrevive à atualização', async () => {
+    await check('isolated: deletion moves the video to Trash and survives a refresh', async () => {
       await reader(page, testUrl, video);
       await page.locator('.delete-trigger').click();
       const dialog = page.getByRole('dialog', { name: 'Excluir do catálogo?', exact: true });
@@ -221,7 +221,7 @@ async function deletionChecks(browser) {
       await page.locator('.trash-card').filter({ hasText: video.title }).waitFor();
       assert.match(await page.locator('main').textContent(), /originais|preservad/i);
     });
-    await check('isolado: restaurar devolve texto, categorias e contadores', async () => {
+    await check('isolated: restoration recovers text, categories and counts', async () => {
       await page.goto(`${testUrl}/#/trash`);
       await page.getByRole('button', { name: `Restaurar vídeo: ${video.title}`, exact: true }).click();
       await poll(async () => (await api(testUrl, '/stats')).videos === initial.videos, 'Active count did not recover');
@@ -236,9 +236,9 @@ async function deletionChecks(browser) {
       await reader(page, testUrl, video);
       assert.equal((await api(testUrl, '/stats')).videos, initial.videos);
     });
-    await check('isolado: arquivos originais inalterados após excluir/restaurar', async () => {
+    await check('isolated: original files unchanged after deletion/restoration', async () => {
       if (originals) assert.deepEqual(sourceManifest(), originals);
-      else console.log('       SHA-256 não executado: informe TEST_SOURCE_DIR com a pasta de fontes isoladas.');
+      else console.log('       SHA-256 skipped: set TEST_SOURCE_DIR to the isolated source directory.');
     });
   } finally {
     if (deletedByTest) await api(testUrl, `/videos/${video.id}/restore`, 'POST');
@@ -253,7 +253,7 @@ async function brandChecks(browser) {
   const video = (await api(mainUrl, '/videos?page_size=1')).items[0];
   assert.ok(video, 'Visual collection needs one active video');
   try {
-    await check('rw/ai: marca, cores computadas e contraste do início', async () => {
+    await check('rw/ai: branding, computed colors and home-page contrast', async () => {
       await page.goto(mainUrl + '/#/');
       await page.locator('.hero h2').waitFor(); await visibleImages(page);
       const fonts = await page.evaluate(async () => {
@@ -265,7 +265,7 @@ async function brandChecks(browser) {
       assert.match(await page.title(), /rw\s*\/\s*ai|rw.ai/i);
       await contrast(page, 'home', ['.page-title-row h1', '.page-title-row h1 span', '.page-description', '.page-eyebrow', '.nav-label', '.sidebar nav a.active span', '.sidebar nav a:not(.active) span', '.hero h2', '.hero-channel', '.hero-meta > span', '.hero .button.primary', '.connection']);
     });
-    await check('rw/ai: contraste dos cartões, leitor e diálogos', async () => {
+    await check('rw/ai: contrast of cards, reader and dialogs', async () => {
       await page.locator('.shelf').first().scrollIntoViewIfNeeded(); await visibleImages(page);
       await contrast(page, 'cards', ['.section-heading h2', '.section-heading p', '.card-channel', '.video-card h3', '.card-meta > span', '.duration']);
       await reader(page, mainUrl, video);
@@ -281,7 +281,7 @@ async function brandChecks(browser) {
       await page.keyboard.press('Escape');
     });
     for (const [width, height] of [[1920, 700], [1366, 768], [1024, 768], [900, 900], [412, 800], [1600, 900]]) {
-      await check(`rw/ai: ${width}×${height}, início/lista/leitor/diálogo sem excesso horizontal`, async () => {
+      await check(`rw/ai: ${width}×${height}, home/list/reader/dialog without horizontal overflow`, async () => {
         await page.setViewportSize({ width, height });
         await page.goto(mainUrl + '/#/'); await page.locator('.hero h2').waitFor();
         await page.locator('.shelf .video-card').first().waitFor(); await visibleImages(page);
@@ -299,7 +299,7 @@ async function brandChecks(browser) {
         await page.keyboard.press('Escape');
       });
     }
-    await check('catálogo principal inalterado e assets somente locais', async () => {
+    await check('main catalog unchanged and assets served locally', async () => {
       const after = await api(mainUrl, '/stats');
       assert.equal(after.videos, before.videos); assert.equal(after.deleted_videos, before.deleted_videos);
       assert.deepEqual(externalRequests, []); assert.deepEqual(blockedWrites, []); assert.deepEqual(errors, []);

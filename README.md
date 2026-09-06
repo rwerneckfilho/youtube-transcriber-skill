@@ -1,14 +1,14 @@
 # YouTube Transcriber Skill
 
-Skill para o Codex que baixa o áudio de um vídeo do YouTube e gera uma transcrição completa localmente com `yt-dlp`, `ffmpeg` e Whisper.cpp. Opcionalmente, separa as falas por speaker com `pyannote.audio`.
+A Codex skill that downloads YouTube audio and creates complete local transcripts with `yt-dlp`, `ffmpeg`, and Whisper.cpp. Optional speaker diarization uses `pyannote.audio` to separate voices.
 
-Não usa API paga. Na primeira execução, o script baixa o modelo multilíngue `large-v3-turbo-q5_0` para o cache local e valida seu checksum SHA-256. Todo o processamento de áudio, transcrição e diarização acontece na máquina local.
+No paid API is required. On its first run, the script downloads the multilingual `large-v3-turbo-q5_0` model to the local cache and verifies its SHA-256 checksum. Audio processing, transcription, and diarization all run on your computer.
 
-O repositório também inclui a plataforma **[rw / ai · Catálogo de transcrições](youtube-catalog/README.md)**: um aplicativo local no Docker para explorar as transcrições por capas, canais e categorias, pesquisar no texto, ler métodos, baixar arquivos e gerenciar a Lixeira. A aba **Adicionar vídeos** transcreve vídeos e playlists completas no Docker; a interface está disponível em português, inglês e espanhol.
+This repository also includes **[rw / ai · Transcript Catalog](youtube-catalog/README.md)**: a local Docker application for browsing transcripts by thumbnail, channel, and category, searching their text, reading method analyses, downloading files, and managing Trash. The **Add videos** tab transcribes individual videos and entire playlists in Docker. The interface supports English, Portuguese, and Spanish.
 
-## Plataforma de catálogo no Docker
+## Docker catalog
 
-Requer Docker Desktop ou Docker Engine com Compose. Quem já usa a versão anterior deve seguir primeiro a [migração do acervo](youtube-catalog/README.md#migrar-a-coleção-da-versão-anterior). Para uma instalação nova, depois de clonar o repositório, no macOS ou Linux:
+Requires Docker Desktop or Docker Engine with Compose. If you already use the previous version, follow the [library migration instructions](youtube-catalog/README.md#migrate-a-collection-from-the-previous-version) first. For a new installation on macOS or Linux, after cloning this repository:
 
 ```bash
 cd youtube-transcriber-skill/youtube-catalog
@@ -16,38 +16,38 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Abra [localhost:8765](http://localhost:8765). Esses passos preparam uma instalação nova; preserve um `.env` já configurado. No macOS também há os atalhos **Iniciar.command** e **Parar.command**. Para Windows e outras opções, consulte as [instruções da plataforma](youtube-catalog/README.md).
+Open [localhost:8765](http://localhost:8765). These steps are for a new installation; preserve an existing `.env` configuration. On macOS, you can also use [Start.command](youtube-catalog/Start.command) and [Stop.command](youtube-catalog/Stop.command). See the [catalog instructions](youtube-catalog/README.md) for configuration and operation details.
 
-O volume Docker **youtube-catalog-storage** armazena o banco SQLite, os conteúdos, as capas, a fila e o modelo. Para trazer a coleção da versão anterior, siga a [migração antes da primeira inicialização](youtube-catalog/README.md#migrar-a-coleção-da-versão-anterior). Ela copia as pastas antigas sem alterá-las; a biblioteca no Docker passa a ser independente delas. A skill de linha de comando continua disponível separadamente.
+The **youtube-catalog-storage** Docker volume stores the SQLite database, content, thumbnails, queue, and model. To import an existing library, follow the [migration instructions before first startup](youtube-catalog/README.md#migrate-a-collection-from-the-previous-version). Migration copies the old folders without modifying them; the Docker library then operates independently. The command-line skill remains available separately.
 
-O projeto **youtube-catalog** pode ser ligado e desligado no Docker. A porta fica restrita ao computador; o volume persiste quando o container é recriado. A leitura e a busca funcionam offline. Novos trabalhos acessam o YouTube e baixam o modelo no primeiro uso; as capas também podem ser baixadas em segundo plano. A transcrição é processada localmente, sem API paga. Ao ligar novamente, a fila retoma os trabalhos incompletos.
+Start and stop the **youtube-catalog** project in Docker. The port is bound to your computer, and the volume persists when the container is recreated. Reading and searching work offline. New jobs access YouTube and download the model on first use; thumbnails may also download in the background. Transcription runs locally without a paid API. Unfinished jobs resume when the application starts again.
 
-**Excluir do catálogo** envia o vídeo para a Lixeira e preserva os originais. **Excluir definitivamente**, na Lixeira, exige uma confirmação e apaga a pasta do vídeo no armazenamento do Docker, incluindo transcrições, análises e mídias importadas. As coleções, capas, banco e configurações pessoais não fazem parte deste repositório.
+**Remove from catalog** moves a video to Trash while preserving its files. **Delete permanently**, available in Trash, requires confirmation and deletes that video's folder from Docker storage, including transcripts, analyses, and imported media. Personal libraries, thumbnails, databases, backups, and configuration are excluded from this repository.
 
-## Requisitos
+## Skill requirements
 
-- Codex com suporte a skills
+- Codex with skill support
 - Python 3
 - `curl`
 - `yt-dlp`
 - `ffmpeg`
-- `whisper-cli` (fornecido pelo pacote `whisper-cpp`)
+- `whisper-cli` (provided by the `whisper-cpp` package)
 
-Para a separação opcional de speakers:
+For optional speaker diarization:
 
-- Python 3.10 ou superior
-- `pyannote.audio` 4.x, instalado pelo script de configuração incluído
-- acesso aceito ao modelo gratuito `pyannote/speaker-diarization-community-1`
+- Python 3.10 or later
+- `pyannote.audio` 4.x, installed by the included setup script
+- Accepted access terms for the free `pyannote/speaker-diarization-community-1` model
 
-No macOS com Homebrew:
+On macOS with Homebrew:
 
 ```bash
 brew install yt-dlp ffmpeg whisper-cpp
 ```
 
-## Instalação
+## Skill installation
 
-Clone este repositório e copie a pasta da skill para o diretório de skills do Codex:
+Clone this repository and copy the skill into the Codex skills directory:
 
 ```bash
 git clone https://github.com/rwerneckfilho/youtube-transcriber-skill.git
@@ -55,9 +55,9 @@ mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 cp -R youtube-transcriber-skill/youtube-full "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full"
 ```
 
-Reinicie o Codex para que a skill seja descoberta.
+Restart Codex to discover the skill.
 
-Para atualizar uma instalação existente:
+To update an existing installation:
 
 ```bash
 git -C youtube-transcriber-skill pull
@@ -65,49 +65,49 @@ rm -rf "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full"
 cp -R youtube-transcriber-skill/youtube-full "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full"
 ```
 
-## Uso
+## Usage
 
-Peça ao Codex, por exemplo:
+Ask Codex, for example:
 
-> Use $youtube-full para transcrever este vídeo completo: https://www.youtube.com/watch?v=VIDEO_ID
+> Use $youtube-full to transcribe this entire YouTube video: https://www.youtube.com/watch?v=VIDEO_ID
 
-Ou execute o script diretamente:
+Or run the script directly:
 
 ```bash
 "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full/scripts/transcribe-youtube.sh" \
-  --language pt \
+  --language en \
   "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-### Separação de speakers
+### Speaker diarization
 
-Configure uma vez o ambiente isolado de diarização:
+Set up the isolated diarization environment once:
 
 ```bash
 "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full/scripts/setup-diarization.sh"
 ```
 
-Antes do primeiro download do modelo:
+Before downloading the model for the first time:
 
-1. Aceite os termos em [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1).
-2. Crie um token de leitura no Hugging Face e exporte-o como `HF_TOKEN`, ou autentique o ambiente isolado:
+1. Accept the terms for [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1).
+2. Create a Hugging Face read token and export it as `HF_TOKEN`, or authenticate in the isolated environment:
 
 ```bash
 "${XDG_CACHE_HOME:-$HOME/.cache}/youtube-full/diarization-venv/bin/hf" auth login
 ```
 
-O token serve somente para autorizar o download inicial dos pesos gratuitos. Depois que o modelo estiver no cache, a diarização roda localmente. As telemetrias opcionais do pyannote e do Hugging Face ficam desativadas por padrão.
+The token only authorizes the initial download of the free model weights. Once the model is cached, diarization runs locally. Optional pyannote and Hugging Face telemetry is disabled by default.
 
-Para transcrever e separar as vozes:
+To transcribe a video and separate voices:
 
 ```bash
 "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full/scripts/transcribe-youtube.sh" \
   --diarize \
-  --language pt \
+  --language en \
   "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-Quando o número de speakers é conhecido, informe-o para melhorar a diarização:
+When the number of speakers is known, specify it to improve diarization:
 
 ```bash
 "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full/scripts/transcribe-youtube.sh" \
@@ -116,26 +116,26 @@ Quando o número de speakers é conhecido, informe-o para melhorar a diarizaçã
   "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-Também estão disponíveis `--min-speakers`, `--max-speakers`, `--diarization-device cpu|cuda|mps` e `--diarization-model ID|PATH`. Um diretório local do modelo pode ser passado com `--diarization-model` para operação inteiramente offline após o download manual.
+Other options include `--min-speakers`, `--max-speakers`, `--diarization-device cpu|cuda|mps`, and `--diarization-model ID|PATH`. Pass a local model directory with `--diarization-model` for fully offline operation after downloading the model manually.
 
-Se o cliente padrão do YouTube responder com HTTP 403, o script tenta automaticamente o cliente `web_embedded`. Usuários avançados podem substituir os argumentos do extrator com `YOUTUBE_YTDLP_EXTRACTOR_ARGS`.
+If the default YouTube client returns HTTP 403, the script automatically retries with the `web_embedded` client. Advanced users can override extractor arguments with `YOUTUBE_YTDLP_EXTRACTOR_ARGS`.
 
-Por padrão, as transcrições são gravadas em `./yt-transcripts/<video-id>/`. Para escolher outra raiz:
+Transcripts are saved to `./yt-transcripts/<video-id>/` by default. To choose another root directory:
 
 ```bash
 export YOUTUBE_TRANSCRIPTS_DIR="$HOME/Documents/yt-transcripts"
 ```
 
-Também é possível informar um diretório de saída diretamente:
+You can also specify an output directory directly:
 
 ```bash
 "${CODEX_HOME:-$HOME/.codex}/skills/youtube-full/scripts/transcribe-youtube.sh" \
   --language en \
   "https://www.youtube.com/watch?v=VIDEO_ID" \
-  "$HOME/Documents/minha-transcricao"
+  "$HOME/Documents/my-transcript"
 ```
 
-Arquivos gerados:
+Generated files:
 
 - `transcript.txt`
 - `transcript.srt`
@@ -144,22 +144,22 @@ Arquivos gerados:
 - `source.m4a`
 - `audio.wav`
 
-Com `--diarize`, também são gerados:
+With `--diarize`, the script also generates:
 
 - `transcript-speakers.txt`
 - `transcript-speakers.srt`
 - `transcript-speakers.json`
 - `diarization.json`
 
-Os speakers recebem identificadores estáveis dentro de cada execução, como `SPEAKER_00` e `SPEAKER_01`. A diarização distingue as vozes, mas não descobre automaticamente os nomes das pessoas.
+Speakers receive stable identifiers within each run, such as `SPEAKER_00` and `SPEAKER_01`. Diarization distinguishes voices but does not automatically identify people's names.
 
-Quando a saída estiver dentro de uma pasta chamada `yt-transcripts`, a skill também atualiza automaticamente o arquivo `INDEX.md` da coleção.
+When the output is inside a folder named `yt-transcripts`, the skill also updates the library's `INDEX.md` automatically.
 
-## Observações
+## Notes
 
-- O modelo padrão ocupa espaço considerável e é baixado apenas na primeira execução.
-- Os modelos de diarização também ocupam espaço considerável e são baixados apenas quando `--diarize` é usado.
-- Use `--model /caminho/modelo.bin` para selecionar outro modelo GGML compatível com Whisper.cpp.
-- Use `--language auto` quando o idioma não for conhecido.
-- Sobreposição de vozes, música, ruído e falas muito curtas podem reduzir a precisão da separação de speakers.
-- Respeite direitos autorais e os termos da plataforma. Use a transcrição para conteúdo que você tem autorização para processar.
+- The default model requires substantial disk space and is downloaded only on its first use.
+- Diarization models also require substantial disk space and are downloaded only when `--diarize` is used.
+- Use `--model /path/to/model.bin` to select another Whisper.cpp-compatible GGML model.
+- Use `--language auto` when the spoken language is unknown.
+- Overlapping voices, music, noise, and very short speech segments can reduce diarization accuracy.
+- Respect copyright and platform terms. Transcribe content you are authorized to process.

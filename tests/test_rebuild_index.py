@@ -46,8 +46,8 @@ class RebuildIndexTests(unittest.TestCase):
             (folder / "diarization.json").write_text("{}\n", encoding="utf-8")
 
             entry = MODULE.collect_entries(Path(temporary))[0]
-            self.assertIn("TXT com speakers", entry["files"])
-            self.assertIn("Diarização", entry["files"])
+            self.assertIn("TXT with speakers", entry["files"])
+            self.assertIn("Diarization", entry["files"])
             self.assertEqual(entry["duration"], "1:05")
 
 

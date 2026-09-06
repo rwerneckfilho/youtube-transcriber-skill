@@ -55,7 +55,7 @@ def test_nonempty_volume_is_not_overwritten(legacy):
     source, data, target = legacy
     (target / "catalog").mkdir(parents=True)
     (target / "catalog" / "important.txt").write_text("keep")
-    with pytest.raises(ValueError, match="já contém dados"):
+    with pytest.raises(ValueError, match="already contains data"):
         storage.import_legacy(target, source, data)
     assert (target / "catalog" / "important.txt").read_text() == "keep"
 
@@ -99,7 +99,7 @@ def test_backup_contains_library_and_refuses_overwrite(legacy):
         assert archive.getmember("catalog/catalog.sqlite3").size > 0
     with pytest.raises(FileExistsError):
         storage.backup(target, destination)
-    with pytest.raises(ValueError, match="fora"):
+    with pytest.raises(ValueError, match="outside"):
         storage.backup(target, target / "inside.tar.gz")
 
 
@@ -170,7 +170,7 @@ def test_pending_purge_refuses_migration_without_mutating_sources_or_journal(leg
         conn.execute("CREATE TABLE purge_jobs(video_id TEXT PRIMARY KEY, source_inode INTEGER)")
         conn.execute("INSERT INTO purge_jobs VALUES('video_one',12345)")
     before = {str(p): p.read_bytes() for root in (source, data) for p in root.rglob("*") if p.is_file()}
-    with pytest.raises(ValueError, match="exclusões definitivas pendentes.*Lixeira.*origem"):
+    with pytest.raises(ValueError, match="pending permanent deletions.*source.*Trash"):
         storage.import_legacy(target, source, data)
     assert before == {str(p): p.read_bytes() for root in (source, data) for p in root.rglob("*") if p.is_file()}
     assert not list(target.iterdir())

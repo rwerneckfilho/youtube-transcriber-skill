@@ -1,96 +1,96 @@
-# Verificação de aceite
+# Acceptance testing
 
-Com o catálogo ligado, execute a partir da pasta `youtube-catalog`:
+With the catalog running, execute this command from the `youtube-catalog` directory:
 
 ```sh
 python3 tests/acceptance.py --url http://127.0.0.1:8765 --source ../yt-transcripts
 ```
 
-O programa usa somente a biblioteca padrão do Python e requisições de leitura. Aguarda a importação inicial por até 90 segundos (`--wait` altera esse prazo). A coleção original nunca recebe arquivos de teste, alterações de categorias ou outros dados de verificação.
+The runner uses only the Python standard library and read-only requests. It waits up to 90 seconds for the initial import (`--wait` changes this timeout). It never adds test files, changes categories, or writes other test data to the original collection.
 
-Os totais esperados são calculados diretamente dos metadados e transcrições disponíveis; não há uma constante de 82 vídeos. O teste consulta a lixeira separadamente e subtrai seus vídeos das verificações do acervo ativo. A soma entre ativos e lixeira deve corresponder às fontes, portanto históricos de fontes removidas podem causar uma diferença legítima. Categorias adicionais do usuário são permitidas. As categorias efetivas retornadas pelos vídeos são usadas para verificar os filtros, preservando personalizações.
+Expected totals are calculated directly from the available metadata and transcripts; the video count is not hardcoded to 82. The test queries Trash separately and excludes its videos from checks of the active collection. Active and trashed videos together should match the source inventory, so records of previously removed sources can produce a legitimate difference. Additional user-created categories are allowed. Filters are checked against the effective categories returned for each video, preserving customizations.
 
-O aceite verifica:
+The acceptance runner checks:
 
-- Estatísticas, todos os IDs e títulos, paginação sem repetições e filtros por canal, categoria e idioma.
-- Busca com e sem acentos e em maiúsculas, busca no texto transcrito e acesso ao segmento correto.
-- Todos os segmentos do vídeo mais longo em páginas de 100, com milissegundos comparados à transcrição original.
-- Métodos sem cabeçalho YAML, ausência de método, falantes e downloads TXT/SRT/JSON idênticos aos originais.
-- Erros JSON para rotas inexistentes, bloqueio de caminhos fora dos downloads, capas locais e carregamento da interface por endereço direto.
-- SHA-256 dos metadados, métodos e transcrições antes e depois dos testes. Mídia de áudio/vídeo não é lida nem alterada.
+- Statistics, every video ID and title, pagination without duplicates, and filters by channel, category, and language.
+- Search with and without accents and in uppercase, transcript content search, and navigation to the matching segment.
+- Every segment of the longest video in pages of 100, comparing millisecond offsets with the original transcript.
+- Method analyses without YAML front matter, missing analyses, speaker labels, and TXT/SRT/JSON downloads identical to the originals.
+- JSON errors for unknown routes, rejection of paths outside the allowed downloads, local thumbnails, and loading the interface through a direct address.
+- SHA-256 hashes of metadata, method analyses, and transcripts before and after testing. Audio and video media are neither read nor modified.
 
-Uma falha é apresentada com o nome do cenário. O processo encerra com código 1 quando algum cenário falha e 0 quando todos passam. Cenários que dependem de exemplos específicos, como títulos acentuados, falantes e classificações, informam quando não encontram uma amostra ativa. Os downloads são conferidos mesmo quando todos os vídeos com falantes estiverem na lixeira.
+Failures include the scenario name. The process exits with code 1 if any scenario fails, or 0 if all pass. Scenarios that require specific examples, such as accented titles, speaker labels, and classifications, report when no active sample is available. Downloads are checked even when all videos with speaker labels are in Trash.
 
-## Verificação no navegador
+## Browser checks
 
-`browser-smoke.cjs` usa Playwright com o Google Chrome instalado. Com Playwright acessível ao Node, execute:
+`browser-smoke.cjs` uses Playwright and an installed Google Chrome browser. With Playwright available to Node, run:
 
 ```sh
 node tests/browser-smoke.cjs
 ```
 
-O endereço padrão é `http://127.0.0.1:8765`; `CATALOG_URL` aceita outro endereço local. Disponibilize `playwright` e `pngjs` em uma instalação Node de testes, por exemplo com `npm install --no-save playwright pngjs`, ou aponte `NODE_PATH` para uma instalação existente desses pacotes. O Chrome deve estar instalado.
+The default address is `http://127.0.0.1:8765`; `CATALOG_URL` accepts another local address. Make `playwright` and `pngjs` available in a Node test environment, for example with `npm install --no-save playwright pngjs`, or point `NODE_PATH` to an existing installation of these packages. Chrome must be installed.
 
-O roteiro verifica início, filtros, paginação, busca, acesso ao trecho encontrado, método, falantes, carregamento progressivo, diretório de canais, teclado e telas de 375 px. Abre e fecha o diálogo de categorias sem salvar. Bloqueia requisições de escrita à API e todo acesso HTTP externo durante a execução; recarrega a interface e repete a leitura nessas condições. Registra erros JavaScript e qualquer tentativa de acesso externo.
+The runner checks the home page, filters, pagination, search, navigation to a matching passage, method analyses, speaker labels, progressive loading, the channel directory, keyboard navigation, and 375 px screens. It opens and closes the category dialog without saving. It blocks API write requests and all external HTTP traffic throughout the run, then reloads the interface and repeats reading checks under these conditions. It records JavaScript errors and any attempted external requests.
 
-As capturas de tela ficam em `/tmp/youtube-catalog-home.png`, `/tmp/youtube-catalog-reader.png` e `/tmp/youtube-catalog-mobile.png`. O teste usa vídeos classificados, com método e com título acentuado da coleção inicial. As verificações de falantes e método ausente informam quando não há amostras ativas.
+Screenshots are saved to `/tmp/youtube-catalog-home.png`, `/tmp/youtube-catalog-reader.png`, and `/tmp/youtube-catalog-mobile.png`. The test uses classified videos, method analyses, and accented titles from the initial collection. Speaker and missing-method checks report when no active samples are available.
 
-## Exclusão definitiva: somente dados descartáveis
+## Permanent deletion: disposable data only
 
-O roteiro `browser-permanent.cjs` apaga de verdade um vídeo artificial e seus arquivos. Ele se recusa a executar fora da porta local `8766` ou contra uma pasta que não seja a fixture temporária marcada pelo preparador:
+`browser-permanent.cjs` actually deletes a synthetic video and its files. It refuses to run outside local port `8766` or against a directory other than the marked temporary fixture created by the setup script:
 
 ```sh
 python3 tests/create-permanent-fixture.py
 ```
 
-O preparador imprime os caminhos `source` e `data` de uma pasta temporária nova, contendo exatamente dois vídeos falsos, transcrições, metadados, métodos e pequenos arquivos de áudio. Inicie um servidor isolado em `127.0.0.1:8766`, montando essa fonte com escrita permitida e usando sua pasta de dados exclusiva. Nunca conecte esse servidor à coleção original. Depois execute:
+The setup script prints the `source` and `data` paths within a new temporary directory containing exactly two synthetic videos, transcripts, metadata, method analyses, and small audio files. Start an isolated server at `127.0.0.1:8766`, mounting this source with write access and using its dedicated data directory. Never connect this server to the original collection. Then run:
 
 ```sh
-TEST_SOURCE_DIR="<source informado pelo preparador>" node tests/browser-permanent.cjs
+TEST_SOURCE_DIR="<source reported by the setup script>" node tests/browser-permanent.cjs
 ```
 
-O roteiro verifica os avisos, o nome do vídeo, foco em Cancelar, Escape, confirmação exata `EXCLUIR`, modal mobile e exclusão da pasta completa. Compara hashes do outro vídeo, verifica sua leitura e seus downloads e atualiza o catálogo para provar que o vídeo removido não reaparece. As ações de mover para a lixeira e restaurar continuam cobertas separadamente por `browser-update.cjs` e devem preservar todos os originais.
+The runner checks warnings, the video name, initial focus on the cancel button, Escape, the exact confirmation token `EXCLUIR` used by the Portuguese interface, the mobile dialog, and deletion of the entire video directory. It compares hashes of the other video, checks its reader and downloads, and refreshes the catalog to prove that the removed video does not reappear. Moving videos to Trash and restoring them remain covered separately by `browser-update.cjs` and must preserve every original file.
 
-Cada execução bem-sucedida requer uma fixture nova, pois a anterior foi parcialmente apagada. As capturas ficam em `/tmp/youtube-catalog-permanent-dialog.png` e `/tmp/youtube-catalog-permanent-mobile.png`; o relatório fica em `/tmp/youtube-catalog-permanent-report.json`.
+Each successful run requires a new fixture because the previous one has been partially deleted. Screenshots are saved to `/tmp/youtube-catalog-permanent-dialog.png` and `/tmp/youtube-catalog-permanent-mobile.png`; the report is saved to `/tmp/youtube-catalog-permanent-report.json`.
 
-## Fila e idiomas da interface com API simulada
+## Queue and interface languages with a mocked API
 
-`browser-jobs.cjs` testa somente a interface compilada de um servidor isolado em `127.0.0.1:8766`. Todas as rotas `/api/*` são interceptadas pelo Playwright e respondidas por fixtures em memória dentro do próprio teste. Nenhum trabalho real é enfileirado e nenhum vídeo é baixado ou transcrito.
+`browser-jobs.cjs` tests only the compiled interface of an isolated server at `127.0.0.1:8766`. Playwright intercepts every `/api/*` route and responds using in-memory fixtures within the test. No real jobs are queued, and no videos are downloaded or transcribed.
 
 ```sh
 node tests/browser-jobs.cjs
 ```
 
-O roteiro cobre envio de vídeo e playlist, seleção do idioma da transcrição, estados da fila, logs, cancelamento e nova tentativa. Também verifica PT/EN/ES nas rotas e diálogos, persistência da preferência da interface após recarregar e layout móvel. As fixtures usam conteúdo neutro para detectar texto da interface que continue em português nas traduções. O relatório declara explicitamente essa cobertura simulada; testes de processamento real, migração e persistência do volume precisam ser executados separadamente.
+The runner covers video and playlist submission, transcription language selection, queue states, logs, cancellation, and retries. It also checks PT/EN/ES across routes and dialogs, persistence of the interface language preference after a reload, and the mobile layout. Fixtures use neutral content to detect interface text that remains in Portuguese in other translations. The report explicitly identifies this mocked coverage; real processing, migration, and volume persistence must be tested separately.
 
-O relatório fica em `/tmp/youtube-catalog-jobs-report.json`, com capturas por idioma. Os roteiros anteriores iniciam seus contextos isolados explicitamente em português, sem modificar a preferência do navegador pessoal do usuário.
+The report is saved to `/tmp/youtube-catalog-jobs-report.json`, with screenshots for each language. The preceding runners explicitly initialize their isolated browser contexts in Portuguese without changing the user's personal browser preference.
 
-## Volume nomeado: integração totalmente sintética
+## Named volume: entirely synthetic integration test
 
-Com a imagem já construída e a porta `8767` livre, execute:
+With the image already built and port `8767` available, run:
 
 ```sh
 python3 tests/docker-volume.py
 ```
 
-O roteiro fixa o ID da imagem local `youtube-catalog:local` (`--image` permite outra imagem já existente), sem baixar imagens. Cria um volume nomeado e uma rede interna exclusivos, gera dois vídeos artificiais dentro do volume e reserva somente `127.0.0.1:8767` no host. Consulta a API HTTP pelo loopback do container, pois algumas versões do Docker Desktop bloqueiam portas publicadas em redes internas. Não monta nem consulta a coleção original e não usa os servidores das portas `8765` e `8766`. Ao terminar, remove somente os recursos que criou.
+The runner pins the ID of the local `youtube-catalog:local` image (`--image` accepts another existing image) without pulling images. It creates a dedicated named volume and internal network, generates two synthetic videos inside the volume, and reserves only `127.0.0.1:8767` on the host. It queries the HTTP API through the container's loopback interface because some Docker Desktop versions block published ports on internal networks. It neither mounts nor reads the original collection and does not use the servers on ports `8765` and `8766`. When finished, it removes only the resources it created.
 
-Verifica categorias editadas, lixeira, fontes, capa armazenada, área de modelos e arquivos de trabalho após reimportar, desligar, ligar e recriar o container. A restauração deve recuperar a data original, a transcrição, o método e as categorias escolhidas. Também cria uma tarefa pendente e cancela outra para conferir sua persistência. O worker fica desabilitado: isso não testa processamento, downloads ou transcrição real.
+The test checks edited categories, Trash, source files, a cached thumbnail, model storage, and working files after reimporting, stopping, starting, and recreating the container. Restoring a video must recover its original addition date, transcript, method analysis, and selected categories. The runner also creates a queued job and cancels another to verify their persistence. The worker remains disabled: this does not test processing, downloads, or real transcription.
 
-A última etapa usa `--network none` e o cliente de testes do FastAPI dentro do container para conferir interface, fontes locais, busca com acentos, segmentos, downloads, capa, lixeira e fila. A rede interna impede acesso externo nas demais etapas. Dez arquivos sintéticos são comparados por SHA-256; o teste também confirma que nenhum modelo foi baixado nem começou um trabalho de transcrição. O relatório fica em `/tmp/youtube-catalog-volume-report.json`.
+The final stage uses `--network none` and the FastAPI test client inside the container to check the interface, local fonts, accent-insensitive search, segments, downloads, thumbnails, Trash, and the queue. The internal network blocks external access during the other stages. Ten synthetic files are compared using SHA-256; the test also confirms that no model was downloaded and no transcription job started processing. The report is saved to `/tmp/youtube-catalog-volume-report.json`.
 
-## Exercícios de resiliência
+## Resilience checks
 
-`browser-update.cjs` verifica a identidade rw / ai, fontes locais, contraste, seis tamanhos de janela e os fluxos de exclusão, cancelamento e restauração. As alterações só são permitidas em um segundo servidor descartável na porta `8766`, com a mesma imagem e fontes montadas para leitura, mas uma pasta de dados temporária. O catálogo principal na porta `8765` recebe apenas consultas.
+`browser-update.cjs` checks rw / ai branding, local fonts, contrast, six viewport sizes, and the deletion, cancellation, and restoration flows. Changes are allowed only on a second, disposable server on port `8766`, using the same image and read-only source mounts but a temporary data directory. The main catalog on port `8765` receives only read requests.
 
 ```sh
 CATALOG_URL=http://127.0.0.1:8765 TEST_CATALOG_URL=http://127.0.0.1:8766 TEST_SOURCE_DIR="$(cd ../yt-transcripts && pwd)" node tests/browser-update.cjs
 ```
 
-Use `UPDATE_TEST_MODE=brand` para verificar apenas a aparência do catálogo principal, sem precisar do segundo servidor. O relatório fica em `/tmp/youtube-catalog-update-report.json`. O roteiro completo também confirma que os arquivos de origem permanecem idênticos após excluir e restaurar um vídeo.
+Use `UPDATE_TEST_MODE=brand` to check only the main catalog's appearance without requiring the second server. The report is saved to `/tmp/youtube-catalog-update-report.json`. The full runner also confirms that source files remain identical after deleting and restoring a video.
 
-`python3 tests/docker-lifecycle.py` cria seu próprio container temporário na porta `8766`. Execute-o com essa porta livre. Ele verifica categorias e exclusões após atualização, parada, reinício e recriação; restaura o vídeo com suas preferências e exercita a leitura com o container sem rede.
+`python3 tests/docker-lifecycle.py` creates its own temporary container on port `8766`. Run it with that port available. It checks categories and deletions after a refresh, stop, restart, and recreation; restores the video with its preferences; and exercises reading with the container disconnected from the network.
 
-Os testes isolados do servidor devem usar uma pasta temporária de fontes e outra de dados. Nessa coleção descartável, verificar importação incremental, fontes incompletas, JSON inválido, remoção e retorno de vídeos, persistência de categorias após reimportação, sobreposição de varreduras e falhas de download de capas. Esses cenários não devem criar ou modificar arquivos em `yt-transcripts`.
+Isolated backend tests should use separate temporary directories for sources and data. In this disposable collection, check incremental imports, incomplete sources, invalid JSON, video removal and return, category persistence after reimporting, overlapping scans, and thumbnail download failures. These scenarios must not create or modify files in `yt-transcripts`.
 
-Na integração Docker, parar e iniciar o serviço e repetir o aceite; depois recriar o container sem remover a pasta persistente e repetir. Com o aplicativo já carregado e as capas em cache, cortar o acesso externo e confirmar navegação, filtros, busca, leitura e downloads locais. O aceite HTTP não prova isoladamente que a rede externa está indisponível, nem substitui a inspeção visual e por teclado da interface.
+For Docker integration, stop and start the service and repeat the acceptance checks, then recreate the container without removing persistent storage and repeat them again. Once the application is loaded and thumbnails are cached, block external access and verify navigation, filters, search, reading, and local downloads. HTTP acceptance alone does not prove that the external network is unavailable or replace visual inspection and keyboard navigation checks.

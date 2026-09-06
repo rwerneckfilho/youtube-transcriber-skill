@@ -25,7 +25,7 @@ async function check(name, operation) {
     console.log(`OK     ${name}`);
   } catch (error) {
     failures.push({ name, message: error.message });
-    console.error(`FALHOU ${name}: ${error.message}`);
+    console.error(`FAILED ${name}: ${error.message}`);
   }
 }
 
@@ -98,7 +98,7 @@ async function main() {
   }
 
   try {
-    await check('início, contador e prateleiras por categoria/canal', async () => {
+    await check('home, count and shelves by category/channel', async () => {
       await gotoHash('/');
       await page.getByRole('heading', { name: 'Grandes ideias. Sempre à mão.' }).waitFor();
       await page.waitForFunction(count => Number(document.querySelector('.collection-counter strong')?.textContent.replace(/\D/g, '')) === count, stats.videos);
@@ -114,7 +114,7 @@ async function main() {
       await page.getByRole('button', { name: 'Por categoria', exact: true }).click();
     });
 
-    await check('todos os vídeos, paginação e filtros combinados', async () => {
+    await check('all videos, pagination and combined filters', async () => {
       await gotoHash('/videos');
       await page.getByRole('heading', { name: 'Todos os vídeos', exact: true }).waitFor();
       await expectResultCount(stats.videos);
@@ -136,7 +136,7 @@ async function main() {
       await expectResultCount(stats.videos);
     });
 
-    await check('busca sem acento, trecho encontrado e destaque no leitor', async () => {
+    await check('accent-insensitive search, matching passage and reader highlight', async () => {
       const candidates = videos.flatMap(video => (video.title.match(/\p{L}+/gu) || []).filter(word => word.length >= 5 && norm(word) !== word.toLowerCase()).map(word => ({ video, word })));
       candidates.sort((a, b) => b.word.length - a.word.length);
       assert.ok(candidates.length, 'No accented title available');
@@ -155,7 +155,7 @@ async function main() {
       assert.ok((await page.locator(`#segment-${matching.match.segment_index} p`).textContent()).trim());
     });
 
-    await check('método e diálogo de categorias sem salvar', async () => {
+    await check('method analysis and category dialog without saving', async () => {
       await reader(methodVideo);
       await page.getByRole('tab', { name: 'Método', exact: true }).click();
       await page.getByRole('heading', { name: 'Análise de método', exact: true }).waitFor();
@@ -171,20 +171,20 @@ async function main() {
       await page.locator('.segment').first().waitFor();
     });
 
-    await check('vídeo sem método e falantes, quando presentes no acervo ativo', async () => {
+    await check('missing-method video and speaker labels, when available in the active collection', async () => {
       if (missingMethod) {
         await reader(missingMethod);
         assert.equal(await page.getByRole('tab', { name: 'Método', exact: true }).count(), 0);
-      } else console.log('       Sem exemplo ativo de vídeo sem método; cenário não executado.');
+      } else console.log('       No active video without a method analysis; scenario skipped.');
       if (speakerVideo) {
         await reader(speakerVideo);
         await page.locator('.segment .speaker').first().waitFor();
         assert.ok(await page.locator('.download-list a').count() >= 6);
         assert.match(await page.locator('.reader-toolbar').textContent(), /Com falantes/);
-      } else console.log('       Sem transcrição com falantes no acervo ativo; cenário não executado.');
+      } else console.log('       No transcript with speaker labels in the active collection; scenario skipped.');
     });
 
-    await check('vídeo mais longo, carregamento progressivo e Ver contexto', async () => {
+    await check('longest video, progressive loading and context view', async () => {
       await reader(longest);
       await expectCount('.segments .segment', 100);
       await page.getByRole('button', { name: 'Carregar próximos 100 trechos', exact: true }).click();
@@ -211,7 +211,7 @@ async function main() {
       await page.screenshot({ path: '/tmp/youtube-catalog-reader.png', fullPage: false });
     });
 
-    await check('diretório de canais e busca por canal', async () => {
+    await check('channel directory and search by channel', async () => {
       await navigation().getByRole('link', { name: 'Canais', exact: true }).click();
       await page.getByRole('heading', { name: 'Vozes que você acompanha.', exact: true }).waitFor();
       await expectCount('.directory-grid .directory-card', stats.channels);
@@ -223,7 +223,7 @@ async function main() {
       await expectResultCount(channel.count);
     });
 
-    await check('375px, teclado e ausência de rolagem horizontal', async () => {
+    await check('375px, keyboard navigation and no horizontal overflow', async () => {
       await page.setViewportSize({ width: 375, height: 812 });
       await gotoHash('/');
       await page.locator('.hero h2').waitFor();
@@ -245,7 +245,7 @@ async function main() {
       await page.getByRole('button', { name: 'Fechar', exact: true }).click();
     });
 
-    await check('recarregar e ler com toda a rede externa bloqueada', async () => {
+    await check('reload and read with all external network access blocked', async () => {
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.locator('.segments .segment').first().waitFor();

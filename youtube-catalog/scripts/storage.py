@@ -31,11 +31,11 @@ def digest(path: Path) -> str:
 
 def regular_tree(root: Path) -> list[Path]:
     if not root.is_dir() or root.is_symlink():
-        raise ValueError(f"A pasta precisa existir e não pode ser um link: {root.name}")
+        raise ValueError(f"The directory must exist and cannot be a symbolic link: {root.name}")
     files = []
     for path in root.rglob("*"):
         if path.is_symlink() or not (path.is_file() or path.is_dir()):
-            raise ValueError(f"Arquivo especial ou link não permitido: {path.relative_to(root)}")
+            raise ValueError(f"Special files and symbolic links are not allowed: {path.relative_to(root)}")
         if path.is_file():
             files.append(path)
     return files
@@ -49,7 +49,7 @@ def copy_verified(source: Path, destination: Path) -> int:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target)
         if digest(path) != digest(target):
-            raise OSError("A cópia não corresponde ao original; importação interrompida.")
+            raise OSError("The copy does not match the original; import stopped.")
     return len(files)
 
 
@@ -58,7 +58,7 @@ def own_tree(root: Path):
         os.chown(root, 1000, 1000)
         for path in root.rglob("*"):
             if path.is_symlink():
-                raise ValueError("O armazenamento não pode conter links simbólicos.")
+                raise ValueError("Storage cannot contain symbolic links.")
             os.chown(path, 1000, 1000)
 
 
@@ -109,18 +109,18 @@ def import_legacy(storage: Path, source: Path, data: Path | None = None, model: 
             with legacy_database(database) as original:
                 has_purges = original.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purge_jobs'").fetchone()
                 if has_purges and original.execute("SELECT 1 FROM purge_jobs LIMIT 1").fetchone():
-                    raise ValueError("Há exclusões definitivas pendentes no catálogo de origem. Conclua essas operações na Lixeira do aplicativo de origem antes de migrar; nenhum arquivo ou registro foi alterado.")
+                    raise ValueError("There are pending permanent deletions in the source catalog. Complete these operations in the source application's Trash before migrating; no files or records have been changed.")
     if model and (not model.is_file() or model.is_symlink() or digest(model) != MODEL_SHA):
-        raise ValueError("O modelo informado não corresponde ao SHA-256 esperado.")
+        raise ValueError("The supplied model does not match the expected SHA-256 checksum.")
     if journal.exists():
         state = json.loads(journal.read_text())
         if state["source"] != str(source.resolve()) or state["data"] != (str(data.resolve()) if data else None):
-            raise ValueError("Retome a migração com as mesmas pastas de origem.")
+            raise ValueError("Resume the migration with the same source directories.")
     else:
         for name in ("catalog", "transcripts"):
             target = storage / name
             if target.exists() and any(target.iterdir()):
-                raise ValueError("O volume já contém dados. Use um volume novo; nenhum arquivo foi substituído.")
+                raise ValueError("The volume already contains data. Use a new volume; no files have been overwritten.")
         state = {"source": str(source.resolve()), "data": str(data.resolve()) if data else None, "copied": False, "published": []}
         write_state(journal, state)
     if not state["copied"]:
@@ -134,7 +134,7 @@ def import_legacy(storage: Path, source: Path, data: Path | None = None, model: 
             with legacy_database(database) as original, sqlite3.connect(stage / "catalog" / "catalog.sqlite3") as copied:
                 original.backup(copied)
                 if copied.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                    raise ValueError("A cópia do banco não passou pela verificação de integridade.")
+                    raise ValueError("The database copy failed the integrity check.")
         if data and (data / "thumbnails").is_dir():
             copy_verified(data / "thumbnails", stage / "catalog" / "thumbnails")
         state.update(copied=True, files=count)
@@ -147,7 +147,7 @@ def import_legacy(storage: Path, source: Path, data: Path | None = None, model: 
                     target.rmdir()  # Refuse to overwrite anything, including unexpected partial data.
                 origin.replace(target)
             elif not target.is_dir():
-                raise ValueError("A migração está incompleta; preserve as origens e confira o volume.")
+                raise ValueError("The migration is incomplete; preserve the sources and check the volume.")
             state["published"].append(name)
             write_state(journal, state)
     for name in ("models", "work", "cache"):
@@ -158,7 +158,7 @@ def import_legacy(storage: Path, source: Path, data: Path | None = None, model: 
             partial = target.with_suffix(target.suffix + ".part")
             shutil.copy2(model, partial)
             if digest(partial) != MODEL_SHA:
-                raise ValueError("Modelo armazenado inválido; não será utilizado.")
+                raise ValueError("The stored model is invalid and will not be used.")
             partial.replace(target)
     own_tree(storage)
     result = {"files": state["files"], "database_imported": bool(data and (data / "catalog.sqlite3").exists()), "already_imported": False}
@@ -172,7 +172,7 @@ def import_legacy(storage: Path, source: Path, data: Path | None = None, model: 
 def backup(storage: Path, destination: Path):
     regular_tree(storage)
     if destination.resolve().is_relative_to(storage.resolve()):
-        raise ValueError("Salve o backup fora do volume do catálogo.")
+        raise ValueError("Save the backup outside the catalog volume.")
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         raise FileExistsError(destination)
@@ -212,7 +212,7 @@ def main():
         result = backup(args.storage, args.destination)
     else:
         if (args.storage / ".migration-in-progress.json").exists():
-            raise SystemExit("Migração interrompida. Retome import-legacy antes de iniciar o catálogo.")
+            raise SystemExit("Migration interrupted. Resume import-legacy before starting the catalog.")
         for name in ("catalog", "transcripts", "models", "work", "cache"):
             (args.storage / name).mkdir(parents=True, exist_ok=True)
         result = {"storage": "ready"}

@@ -138,7 +138,7 @@ let browser;
   const page = await context.newPage(); page.setDefaultTimeout(20000);
   page.on('pageerror', error => state.pageErrors.push(error.message));
 
-  await step('formulário envia vídeo e playlist com idioma de transcrição independente da interface', async () => {
+  await step('form submits a video and playlist with transcription language independent of the interface', async () => {
     await ready(page);
     await page.locator('#interface-language').selectOption('pt');
     await page.locator('#source-url').fill('https://www.youtube.com/watch?v=BaW_jenozKc');
@@ -156,7 +156,7 @@ let browser;
     assert.deepEqual(state.requests.filter(request => request.path === '/jobs' && request.method === 'POST')[1].body,
       { url: 'https://www.youtube.com/playlist?list=PL_FIXTURE_ONLY', kind: 'playlist', language: 'es' });
   });
-  await step('fila mostra descoberta, execução, logs e resultado parcial simulados', async () => {
+  await step('queue shows mocked discovery, execution, logs and partial result', async () => {
     const job = state.jobs[0];
     Object.assign(job, { status: 'discovering', stage: 'discovering' });
     await waitJob(page, job, /Descobr|Identific|Descoberta/i);
@@ -173,7 +173,7 @@ let browser;
     await waitJob(page, job, /Concluído com falhas/i);
     await page.locator(`a[href="#/video/${video.id}"]`).first().waitFor();
   });
-  await step('cancelamento e nova tentativa usam somente os endpoints simulados corretos', async () => {
+  await step('cancellation and retry use only the correct mocked endpoints', async () => {
     const second = state.jobs[1];
     await page.locator(`[data-job-id="${second.id}"][data-job-action="cancel"]`).click();
     await waitJob(page, second, /Cancelad/i);
@@ -187,7 +187,7 @@ let browser;
     await waitJob(page, second, /Concluíd|Concluid|Finalizad/i);
   });
   for (const locale of ['pt', 'en', 'es']) {
-    await step(`interface ${locale}: preferência persistida, rotas e diálogos localizados`, async () => {
+    await step(`interface ${locale}: persisted preference, localized routes and dialogs`, async () => {
       await ready(page);
       await page.locator('#interface-language').selectOption(locale);
       assert.equal(await page.locator('#interface-language').getAttribute('aria-label'), languages[locale].selector);
@@ -214,7 +214,7 @@ let browser;
       assert.ok((await page.locator('.permanent-confirmation').textContent()).includes(languages[locale].token));
       await page.keyboard.press('Escape');
     });
-    await step(`interface ${locale}: tela móvel de adição e fila sem rolagem horizontal`, async () => {
+    await step(`interface ${locale}: mobile submission and queue without horizontal overflow`, async () => {
       await page.setViewportSize({ width: 412, height: 800 });
       await ready(page); await noOverflow(page, `add ${locale}`);
       await noPortugueseLeak(page, locale, 'mobile add');

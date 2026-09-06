@@ -36,7 +36,7 @@ import base64, hashlib, json
 from pathlib import Path
 root = Path('/storage')
 source = root / 'transcripts'
-assert not list(source.iterdir()), 'A fixture exige um volume novo e vazio'
+assert not list(source.iterdir()), 'The fixture requires a new, empty volume'
 for video_id in ('volume_keep', 'volume_trash'):
     folder = source / video_id
     folder.mkdir()
@@ -75,11 +75,11 @@ assert fixture['purpose'] == 'synthetic-volume-test'
 source = root / 'transcripts'
 actual = {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest()
           for p in sorted(source.rglob('*')) if p.is_file()}
-assert actual == fixture['manifest'], 'Fontes sintéticas foram alteradas'
+assert actual == fixture['manifest'], 'Synthetic sources were modified'
 assert (root / 'models' / 'fixture-only.bin').read_bytes() == b'Synthetic model persistence marker; not a Whisper model.\n'
 assert (root / 'work' / 'fixture-only.txt').read_text() == 'Synthetic work persistence marker.\n'
-assert len(list((root / 'models').iterdir())) == 1, 'Um modelo foi baixado durante o teste'
-assert len(list((root / 'work').iterdir())) == 1, 'O processamento de vídeo foi iniciado'
+assert len(list((root / 'models').iterdir())) == 1, 'A model was downloaded during the test'
+assert len(list((root / 'work').iterdir())) == 1, 'Video processing was started'
 print(json.dumps({'files': len(actual), 'models_downloaded': 0, 'processing_started': False}))
 '''
 
@@ -125,7 +125,7 @@ with TestClient(create_app(initial_scan=False, start_jobs=False, download_thumbn
         assert response.status_code == 200 and response.content
         if asset.endswith('.css'):
             fonts = set(re.findall(r'url\((/assets/[^)]+\.woff2)\)', response.text))
-            assert fonts, 'CSS sem fontes locais'
+            assert fonts, 'CSS has no local fonts'
             for font in fonts:
                 assert client.get(font).status_code == 200
             font_count += len(fonts)
@@ -137,7 +137,7 @@ with TestClient(create_app(initial_scan=False, start_jobs=False, download_thumbn
 def docker(*args: str, timeout: int = 70) -> str:
     result = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
     if result.returncode:
-        raise RuntimeError(f"docker {args[0]} falhou: {result.stderr.strip() or result.stdout.strip()}")
+        raise RuntimeError(f"docker {args[0]} failed: {result.stderr.strip() or result.stdout.strip()}")
     return result.stdout.strip()
 
 
@@ -158,18 +158,18 @@ def ready(total: int = 2):
         except (RuntimeError, OSError):
             pass
         time.sleep(.3)
-    raise AssertionError("O container sintético não concluiu a importação")
+    raise AssertionError("The synthetic container did not finish importing")
 
 
 def main() -> int:
     global CONTAINER
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", default="youtube-catalog:local", help="Imagem já construída localmente; não será baixada")
+    parser.add_argument("--image", default="youtube-catalog:local", help="Image already built locally; it will not be pulled")
     args = parser.parse_args()
     with socket.socket() as probe:
         probe.settimeout(1)
         if probe.connect_ex(("127.0.0.1", 8767)) == 0:
-            raise SystemExit("A porta 8767 está ocupada; nenhum recurso foi criado ou alterado.")
+            raise SystemExit("Port 8767 is occupied; no resources were created or modified.")
     image_id = docker("image", "inspect", "--format", "{{.Id}}", args.image)
     name = "youtube-catalog-volume-check-" + uuid.uuid4().hex[:12]
     CONTAINER = name
@@ -177,7 +177,7 @@ def main() -> int:
     report = {"image": args.image, "image_id": image_id, "port": 8767,
               "volume": volume, "network": "internal; offline phase: none",
               "synthetic_sources_only": True, "job_worker_enabled": False,
-              "limits": "Confirma persistência queued/cancelled; não executa downloads ou transcrição real.",
+              "limits": "Verifies queued/cancelled persistence; does not run downloads or real transcription.",
               "checks": [], "errors": []}
     created_volume = created_network = False
     common = ["--pull=never", "--read-only", "--tmpfs", "/tmp:rw,size=64m,mode=1777",
@@ -203,10 +203,10 @@ def main() -> int:
         seed = json.loads(docker("run", "--rm", *common, "--network", "none", "--entrypoint", "python", image_id, "-c", SEED))
         assert seed["files"] == 10
         report["source_files"] = seed["files"]
-        print("Preparado: volume descartável, dez arquivos sintéticos e rede interna", flush=True)
+        print("Ready: disposable volume, ten synthetic files and internal network", flush=True)
         start_new()
         assert api("/stats")["videos"] == 2 and api("/jobs")["total"] == 0
-        ok("Volume nomeado novo importa somente dois vídeos sintéticos, sem rede externa")
+        ok("New named volume imports only two synthetic videos, with no external network")
 
         category = api("/categories", "POST", {"name": "Preferência no volume"})
         api(f"/categories/{category['id']}", "PATCH", {"name": "Preferência persistente"})
@@ -242,17 +242,17 @@ def main() -> int:
         api("/scan", "POST")
         ready()
         assert_saved()
-        ok("Categorias, lixeira e tarefas queued/cancelled permanecem após reimportar")
+        ok("Categories, Trash and queued/cancelled jobs persist after reimporting")
         docker("stop", "--time", "40", name)
         docker("start", name)
         ready()
         assert_saved()
-        ok("Desligar e ligar preserva categorias, lixeira, fila e os dez arquivos de origem")
+        ok("Stopping and starting preserves categories, Trash, the queue and all ten source files")
         docker("stop", "--time", "40", name)
         docker("rm", name)
         start_new()
         assert_saved()
-        ok("Recriar o container com o mesmo volume preserva dados, modelos e área de trabalho")
+        ok("Recreating the container with the same volume preserves data, models and working files")
         restored = api(f"/videos/{TRASH}/restore", "POST")
         assert restored["category_override"] and restored["categories"] == expected["categories"]
         assert restored["added_at"] == expected["added_at"] and restored["deleted_at"] is None
@@ -261,16 +261,16 @@ def main() -> int:
         api(f"/videos/{TRASH}", "DELETE")
         expected["deleted_at"] = api("/videos?deleted=true")["items"][0]["deleted_at"]
         assert_saved()
-        ok("Restaurar após recriação recupera texto, método, data de inclusão e categorias editadas")
+        ok("Restoring after recreation recovers text, method analysis, addition date and edited categories")
         docker("stop", "--time", "40", name)
         docker("rm", name)
         offline = docker("run", "--rm", *common, "--network", "none", "--entrypoint", "python", image_id,
                          "-c", OFFLINE, json.dumps(expected))
         report["offline"] = json.loads(offline.splitlines()[-1])
-        ok("Sem rede: interface, fontes locais, busca sem acentos, leitura, downloads, capa e fila persistente")
+        ok("Offline: interface, local fonts, accent-insensitive search, reading, downloads, thumbnail and persistent queue")
     except Exception as exc:
         report["errors"].append(f"{type(exc).__name__}: {exc}")
-        print("FALHOU " + report["errors"][-1], file=sys.stderr, flush=True)
+        print("FAILED " + report["errors"][-1], file=sys.stderr, flush=True)
         logs = subprocess.run(["docker", "logs", "--tail", "35", name], capture_output=True, text=True)
         if logs.returncode == 0:
             report["container_logs"] = logs.stdout + logs.stderr
@@ -285,7 +285,7 @@ def main() -> int:
         report["cleanup_errors"] = cleanup_errors
         report["errors"].extend(cleanup_errors)
         REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(f"Relatório: {REPORT}", flush=True)
+        print(f"Report: {REPORT}", flush=True)
     return 1 if report["errors"] else 0
 
 

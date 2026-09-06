@@ -35,13 +35,13 @@ def file_links(folder: Path) -> str:
         ("transcript.txt", "TXT"),
         ("transcript.srt", "SRT"),
         ("transcript.json", "JSON"),
-        ("transcript-speakers.txt", "TXT com speakers"),
-        ("transcript-speakers.srt", "SRT com speakers"),
-        ("transcript-speakers.json", "JSON com speakers"),
-        ("diarization.json", "Diarização"),
-        ("source.m4a", "Áudio M4A"),
-        ("audio.wav", "Áudio WAV"),
-        ("video.json", "Metadados"),
+        ("transcript-speakers.txt", "TXT with speakers"),
+        ("transcript-speakers.srt", "SRT with speakers"),
+        ("transcript-speakers.json", "JSON with speakers"),
+        ("diarization.json", "Diarization"),
+        ("source.m4a", "M4A audio"),
+        ("audio.wav", "WAV audio"),
+        ("video.json", "Metadata"),
     )
     return " · ".join(
         f"[{label}]({folder.name}/{name})" for name, label in labels if (folder / name).is_file()
@@ -78,11 +78,11 @@ def collect_entries(root: Path) -> list[dict[str, str]]:
 
 def build_markdown(entries: list[dict[str, str]]) -> str:
     lines = [
-        "# Índice de transcrições do YouTube",
+        "# YouTube transcript index",
         "",
-        "Atualizado automaticamente pela skill `youtube-full`.",
+        "Automatically updated by the `youtube-full` skill.",
         "",
-        "| Adicionado | Vídeo | Canal | Duração | Idioma | Arquivos |",
+        "| Added | Video | Channel | Duration | Language | Files |",
         "|---|---|---|---:|---|---|",
     ]
     for entry in entries:
@@ -91,7 +91,7 @@ def build_markdown(entries: list[dict[str, str]]) -> str:
             f"{entry['duration']} | {entry['language']} | {entry['files']} |"
         )
     if not entries:
-        lines.append("| — | Nenhuma transcrição adicionada | — | — | — | — |")
+        lines.append("| — | No transcripts added | — | — | — | — |")
     lines.append("")
     return "\n".join(lines)
 

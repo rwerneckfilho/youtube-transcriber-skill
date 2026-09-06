@@ -346,7 +346,7 @@ class Catalog:
                         message = "Arquivo JSON ou YAML inválido; última importação válida preservada."
                     else:
                         message = str(exc)[:300] or "Não foi possível importar este vídeo."
-                    LOG.warning("Importação de %s: %s", video_id, message)
+                    LOG.warning("Importing %s: %s", video_id, message)
                     with self.db() as conn:
                         conn.execute("INSERT INTO sources(id,fingerprint,warning,present) VALUES(?,?,?,1) ON CONFLICT(id) DO UPDATE SET fingerprint=excluded.fingerprint,warning=excluded.warning,present=1", (video_id, fingerprint, message))
                         try:
@@ -364,7 +364,7 @@ class Catalog:
             if self.thumbnail_manager:
                 self.thumbnail_manager.enqueue_missing()
         except Exception:
-            LOG.exception("Falha ao atualizar catálogo")
+            LOG.exception("Failed to refresh the catalog")
             with self.db() as conn:
                 conn.execute("INSERT OR REPLACE INTO settings VALUES('scan_error',?)", ("A atualização falhou. Confira se a pasta de transcrições está montada e pode ser lida.",))
         finally:
@@ -635,7 +635,7 @@ class Catalog:
                 message = str(exc) if isinstance(exc, PurgeConflict) else "Não foi possível concluir a exclusão definitiva. Confira a montagem de escrita e as permissões da coleção/cache; o item permanece na Lixeira. Uma remoção iniciada pode estar parcial: tente concluir novamente."
                 with self.db() as conn:
                     conn.execute("UPDATE purge_jobs SET error=? WHERE video_id=?", (message, video_id))
-                LOG.warning("Exclusão definitiva de %s interrompida (%s)", video_id, type(exc).__name__)
+                LOG.warning("Permanent deletion of %s interrupted (%s)", video_id, type(exc).__name__)
                 if isinstance(exc, PurgeConflict):
                     raise
                 raise OSError(message) from exc

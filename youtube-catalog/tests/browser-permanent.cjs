@@ -111,7 +111,7 @@ async function step(name, work) {
   const confirm = () => dialog().getByRole('button', { name: 'Excluir definitivamente', exact: true });
   const field = () => page.locator('#permanent-confirmation');
   try {
-    await step('somente a lixeira oferece exclusão definitiva', async () => {
+    await step('only Trash offers permanent deletion', async () => {
       await page.goto(`${base}/#/video/${targetId}`);
       await page.getByRole('heading', { name: target.title, exact: true }).waitFor();
       assert.equal(await page.locator('.permanent-delete-trigger').count(), 0);
@@ -123,7 +123,7 @@ async function step(name, work) {
       await trigger().waitFor();
       assert.deepEqual(treeManifest(source), originals, 'Soft deletion touched source files');
     });
-    await step('aviso, nome, foco em Cancelar e Escape preservam os arquivos', async () => {
+    await step('warning, name, cancel-button focus and Escape preserve files', async () => {
       await trigger().click(); await dialog().waitFor();
       const content = await dialog().textContent();
       assert.ok(content.includes(target.title));
@@ -141,7 +141,7 @@ async function step(name, work) {
       assert.deepEqual(treeManifest(source), originals);
       assert.equal((await api('/stats')).deleted_videos, 1);
     });
-    await step('somente EXCLUIR exato habilita a confirmação, inclusive com Enter', async () => {
+    await step('only the exact EXCLUIR token enables confirmation, including with Enter', async () => {
       await trigger().click(); await dialog().waitFor();
       for (const value of ['', 'excluir', 'EXCLUIR ', 'REMOVER']) {
         await field().fill(value);
@@ -154,7 +154,7 @@ async function step(name, work) {
       await page.keyboard.press('Escape'); await dialog().waitFor({ state: 'hidden' });
       assert.deepEqual(treeManifest(source), originals, 'Escape after valid text must preserve files');
     });
-    await step('modal mobile cabe na tela e reinicia a confirmação', async () => {
+    await step('mobile dialog fits the viewport and resets confirmation', async () => {
       await page.setViewportSize({ width: 412, height: 800 });
       await trigger().click(); await dialog().waitFor();
       assert.equal(await field().inputValue(), '');
@@ -166,7 +166,7 @@ async function step(name, work) {
       assert.ok(await page.evaluate(() => Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) <= innerWidth + 1));
       await page.screenshot({ path: '/tmp/youtube-catalog-permanent-mobile.png' });
     });
-    await step('confirmação remove a pasta completa e o item da API e da lixeira', async () => {
+    await step('confirmation removes the entire directory and the API and Trash entry', async () => {
       await field().fill('EXCLUIR');
       const responsePromise = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url() === `${base}/api/videos/${targetId}/permanent`);
       await confirm().click();
@@ -183,7 +183,7 @@ async function step(name, work) {
       }
       assert.equal((await api('/stats')).videos, 1);
     });
-    await step('nova importação não ressuscita o vídeo e preserva o outro integralmente', async () => {
+    await step('reimport does not resurrect the video and fully preserves the other one', async () => {
       const previousScan = (await api('/stats')).last_scan;
       await api('/scan', 'POST');
       await poll(async () => { const stats = await api('/stats'); return !stats.scanning && stats.last_scan !== previousScan; }, 'Scan did not finish');
